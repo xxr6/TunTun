@@ -1,0 +1,23 @@
+# 囤囤 TUNTUN 后端依赖
+# 说明：密码哈希直接用 bcrypt 库（passlib 已停止维护，且在 Python 3.13 下依赖被移除的 crypt 标准库会崩）。
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy[asyncio]>=2.0.30
+aiosqlite>=0.20          # 开发态 SQLite 驱动；正式用 asyncpg
+asyncpg>=0.29            # 生产 PostgreSQL 驱动
+alembic>=1.13
+pydantic>=2.7
+pydantic-settings>=2.3
+email-validator>=2.1
+pgvector>=0.2            # PostgreSQL 向量（RAG，M5 起用）
+python-multipart>=0.0.9
+bcrypt>=4.1
+python-jose[cryptography]>=3.3
+structlog>=24.1
+fsrs>=6.0              # FSRS 间隔重复调度（py-fsrs）
+pymupdf>=1.24          # PDF 解析（M3 内容库）
+python-docx>=1.1       # DOCX 解析（段落 + 表格）
+python-pptx>=0.6.23    # PPTX 解析（逐页文本框）
+EbookLib>=0.18         # EPUB 解析（内页 HTML 剥标签）
+httpx>=0.27            # LLM 抽象层直调（OpenAI 兼容协议）
+tzdata>=2024.1         # Windows 下 zoneinfo 需要 IANA 时区库（用户本地时区切天用）

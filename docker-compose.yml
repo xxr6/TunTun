@@ -1,0 +1,39 @@
+# 囤囤 TUNTUN · Docker Compose 一键起
+# 生产 / 正式部署用。开发态可直接本地跑（见 README）。
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: zhistack
+      POSTGRES_USER: zhistack
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-zhistack}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhistack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      DB_DSN: postgresql+asyncpg://zhistack:${DB_PASSWORD:-zhistack}@db:5432/zhistack
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - storage:/data/storage
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  storage:

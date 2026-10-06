@@ -1,0 +1,147 @@
+/* ============================================================
+   组件样式（照抄 demo/index.html 的通用组件类）
+   ============================================================ */
+
+/* 布局工具 */
+.row { display: flex; align-items: center; }
+.gap8 { gap: 8px; } .gap12 { gap: 12px; } .gap16 { gap: 16px; }
+.between { justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.muted { color: var(--ink2); }
+.pad { padding: 20px 22px; }
+
+/* chip 标签 */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; border: 2px solid var(--line); }
+.chip-p { background: var(--grape-l); color: var(--grape-d); }
+.chip-m { background: var(--mint-l); color: var(--mint-d); }
+.chip-o { background: var(--orange-l); color: var(--orange-d); }
+.chip-g { background: var(--warm); color: var(--ink2); }
+
+/* masonry 文件卡（内容库） */
+.masonry { columns: 3; column-gap: 14px; }
+@media (max-width: 1000px) { .masonry { columns: 2; } }
+@media (max-width: 640px) { .masonry { columns: 1; } }
+.fcard {
+  break-inside: avoid; margin-bottom: 14px;
+  background: var(--paper); border: 2.5px solid var(--line); border-radius: var(--r-md);
+  padding: 15px 16px; box-shadow: var(--pop-sm); cursor: pointer;
+  transition: transform 0.34s var(--ease-out-quart), box-shadow 0.34s var(--ease-out-quart);
+}
+.fcard:hover { transform: translate(-3px, -4px) rotate(-1deg); box-shadow: var(--pop); }
+.fcard .fi { width: 40px; height: 40px; border-radius: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 11px; border: 2px solid var(--line); }
+.fcard .fi .icon { width: 19px; height: 19px; }
+.fcard .fn { font-size: 14.5px; font-weight: 750; line-height: 1.4; }
+.fcard .fm { font-size: 12px; color: var(--ink3); margin-top: 4px; }
+.fcard .fbar { height: 10px; border-radius: 99px; background: var(--warm); border: 2px solid var(--line); margin-top: 11px; overflow: hidden; }
+.fcard .fbar i { display: block; height: 100%; background: var(--mint); transition: width 1s var(--ease-out); }
+.fcard:hover .fbar i { background: var(--orange); }
+
+/* dropzone 拖拽上传 */
+.dropzone {
+  border: 3px dashed var(--ink3); border-radius: var(--r-lg); padding: 28px;
+  text-align: center; background: var(--cream); transition: all 0.35s var(--ease); cursor: pointer;
+}
+.dropzone:hover { border-color: var(--orange); background: var(--orange-l); transform: rotate(-0.5deg) scale(1.005); }
+.dropzone:hover .dz-ic { transform: translateY(-6px) rotate(-10deg); }
+.dz-ic {
+  width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 18px;
+  background: var(--ham-l); border: 2.5px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.45s var(--ease-out-quart);
+}
+.dz-ic .icon { width: 26px; height: 26px; }
+
+/* 复习页 */
+.rev-wrap { max-width: 780px; margin: 0 auto; }
+.rev-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.prog-line { flex: 1; height: 14px; border-radius: 99px; background: var(--warm); border: 2.5px solid var(--line); overflow: hidden; margin: 0 16px; }
+.prog-line i { display: block; height: 100%; background: var(--orange); transition: width 0.55s var(--ease-out); }
+.rev-count { font-size: 13.5px; font-weight: 750; color: var(--ink2); white-space: nowrap; }
+
+/* 翻卡面 */
+.face {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: var(--paper); border: 2.5px solid var(--line); border-radius: var(--r-xl);
+  box-shadow: var(--pop); padding: 32px 30px; display: flex; flex-direction: column;
+}
+.face-back { transform: rotateY(180deg); background: linear-gradient(160deg, var(--ins-a), var(--ins-b)); }
+.face-tag {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 800;
+  margin-bottom: 16px; border: 2px solid var(--line);
+}
+.face-q { font-size: 23px; font-weight: 750; line-height: 1.65; letter-spacing: -0.2px; flex: 1; display: flex; align-items: center; white-space: pre-wrap; word-break: break-word; }
+.face-a { font-size: 17.5px; line-height: 1.8; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+.cloze { background: var(--ham); padding: 2px 9px; border-radius: 8px; font-weight: 800; border: 2px solid var(--line); }
+.src-link {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink3);
+  margin-top: 14px; padding-top: 13px; border-top: 2px dashed var(--hair);
+  width: 100%; transition: color 0.25s; font-weight: 600;
+}
+.src-link:hover { color: var(--orange-d); }
+.src-link .icon { width: 14px; height: 14px; }
+.flip-hint { text-align: center; font-size: 12.5px; color: var(--ink3); margin-top: 12px; font-weight: 600; }
+
+/* 评分按钮 */
+.rate-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) { .rate-grid { grid-template-columns: repeat(2, 1fr); } }
+.rate {
+  padding: 14px 8px; border-radius: var(--r-md); border: 2.5px solid var(--line);
+  background: var(--paper); text-align: center; box-shadow: var(--pop-sm);
+  transition: transform 0.2s var(--ease-out-quart), box-shadow 0.2s var(--ease-out-quart), background 0.2s;
+  position: relative; cursor: pointer; font-family: inherit;
+}
+.rate:hover { transform: translate(-2px, -3px) rotate(-1.5deg); box-shadow: var(--pop); }
+.rate:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--line); }
+.rate .rn { font-size: 15px; font-weight: 800; color: var(--ink); }
+.rate .ri { font-size: 12px; color: var(--ink3); margin-top: 2px; font-weight: 600; }
+.rate .rk { position: absolute; top: 5px; left: 8px; font-size: 10.5px; color: var(--ink3); font-weight: 800; opacity: 0.7; }
+.rate[data-r='1']:hover { background: var(--berry-l); }
+.rate[data-r='2']:hover { background: var(--orange-l); }
+.rate[data-r='3']:hover { background: var(--mint-l); }
+.rate[data-r='4']:hover { background: var(--grape-l); }
+.rate-hint { text-align: center; font-size: 13px; color: var(--ink2); font-weight: 700; margin-top: 14px; min-height: 20px; }
+
+/* 按钮变体 */
+.btn-ghost { background: var(--paper); color: var(--ink2); }
+.btn-soft { background: var(--ham-l); color: var(--ink); }
+.btn-lg { padding: 15px 28px; font-size: 16px; }
+
+/* 连续打卡徽章 */
+.streak {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--paper); color: var(--ink);
+  border: 2.5px solid var(--line); border-radius: 999px;
+  padding: 5px 14px; font-size: 12.5px; font-weight: 800; box-shadow: var(--pop-sm);
+}
+
+/* 今日计划任务行 */
+.task {
+  display: flex; align-items: center; gap: 13px; padding: 12px 14px;
+  border-radius: var(--r-md); border: 2px solid transparent;
+  transition: all 0.28s var(--ease); cursor: pointer; position: relative; overflow: hidden;
+}
+.task:hover { background: var(--warm); border-color: var(--line); transform: translateX(4px) rotate(-0.4deg); }
+.tick {
+  width: 27px; height: 27px; border-radius: 10px; border: 2.5px solid var(--line); flex: none;
+  display: flex; align-items: center; justify-content: center; background: var(--paper);
+  transition: all 0.3s var(--ease-out-quart);
+}
+.tick .icon { width: 15px; height: 15px; stroke-width: 3.4; color: #fff; opacity: 0; transform: scale(0.3); transition: all 0.3s var(--ease-out-quart); }
+.task.done .tick { background: var(--mint); transform: rotate(-10deg) scale(1.08); }
+.task.done .tick .icon { opacity: 1; transform: scale(1); }
+.task.done .t-name { text-decoration: line-through; color: var(--ink3); }
+.t-name { font-size: 14.5px; font-weight: 650; }
+.t-meta { font-size: 12px; color: var(--ink3); margin-top: 1px; }
+
+/* 洞察卡（学习节奏） */
+.insight { background: linear-gradient(160deg, var(--ins-a), var(--ins-b)); }
+.insight-row { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 2px dashed var(--hair2); }
+.insight-row:last-child { border-bottom: none; padding-bottom: 0; }
+.insight-row .ic {
+  width: 34px; height: 34px; border-radius: 12px; flex: none;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--line);
+}
+.insight-row .ic .icon { width: 16px; height: 16px; }
+.insight-row .tt { font-size: 14px; font-weight: 750; }
+.insight-row .dd { font-size: 12.5px; color: var(--ink2); margin-top: 2px; line-height: 1.55; }

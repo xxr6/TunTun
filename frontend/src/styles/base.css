@@ -1,0 +1,107 @@
+/* 基础样式：body、点阵底纹、贴纸卡片、按钮、无障碍基线 */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* 22px 像素点阵底纹 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--dot) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+/* 贴纸卡片：白底 + 2.5px 描边 + 实心硬投影 + 大圆角 */
+.card {
+  background: var(--paper);
+  border: 2.5px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--pop-sm);
+}
+
+/* 按钮：3D 按压手感 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 750;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2.5px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--pop-sm);
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-out-quart), box-shadow 0.15s var(--ease-out-quart);
+}
+.btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: var(--orange);
+  color: var(--onfill);
+  border-color: var(--line);
+}
+
+/* 焦点样式：默认无框保持贴纸观感；键盘导航时给高对比焦点环（贴纸描边语言） */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2.5px solid var(--line);
+  outline-offset: 2px;
+}
+
+/* 手写感 SVG 图标（demo 同款：stroke 1.9、圆头圆角） */
+.icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 页面标题层级（demo 同款） */
+.h-page { font-size: 27px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.3; }
+.h-sub { color: var(--ink2); font-size: 14px; margin-top: 5px; }
+.h-sec { font-size: 17px; font-weight: 750; letter-spacing: -0.2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

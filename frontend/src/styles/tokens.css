@@ -1,0 +1,225 @@
+/* ============================================================
+   囤囤 TUNTUN · 设计 Token（迁移自 demo/index.html 的贴纸卡通视觉系统）
+   - 三主题：cocoa（默认暖色）/ night（深色夜读）/ mint（冷色薄荷）
+   - 所有颜色走 CSS 变量，禁止在主题块外写死颜色
+   - 对比度红线：亮色填充用 --onfill（深墨），深色底用 --onink
+   ============================================================ */
+
+:root {
+  /* 圆角 */
+  --r-xl: 30px;
+  --r-lg: 24px;
+  --r-md: 18px;
+  --r-sm: 12px;
+
+  /* 硬投影（实心，非模糊） */
+  --pop: 4px 4px 0 var(--line);
+  --pop-sm: 3px 3px 0 var(--line);
+  --pop-lg: 7px 7px 0 var(--line);
+
+  /* 缓动 token：入场/常规、离场/收起、物理收尾（近临界阻尼，非回弹） */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-out-quart: cubic-bezier(.25, 1, .5, 1);
+  --ease-out-quint: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-quart: cubic-bezier(.5, 0, .75, 0);
+  --ease-spring: cubic-bezier(.34, 1.42, .5, 1);
+}
+
+/* ── 主题 1 · 可可奶油（默认） ───────────────── */
+html[data-theme='cocoa'] {
+  --bg: #fbf2e2;
+  --paper: #ffffff;
+  --cream: #fffcf5;
+  --warm: #f7e8ce;
+  --ink: #3d2b1c;
+  --ink2: #7a6553;
+  --ink3: #b09a84;
+  --ham: #ffce8e;
+  --ham-l: #fff1dc;
+  --ham-d: #b97722;
+  --orange: #ff8b4a;
+  --orange-d: #c4531a;
+  --orange-l: #ffe6d4;
+  --mint: #38c79c;
+  --mint-d: #0f8a67;
+  --mint-l: #dbf6ec;
+  --grape: #8b7bf5;
+  --grape-d: #5442cc;
+  --grape-l: #ede9ff;
+  --berry: #ff7ba6;
+  --berry-l: #ffe5ee;
+  --sky: #4da3f5;
+  --sky-l: #e3f1fe;
+  --line: #3d2b1c;
+  --onfill: #3d2b1c;
+  --onink: #fffcf5;
+  --onink-veil: rgba(255, 255, 255, 0.16);
+  --pop-line: #2a1d12;
+  --glare: rgba(255, 255, 255, 0.5);
+  --hair: #ebd9be;
+  --hair2: #efddc2;
+  --hairline: rgba(61, 43, 28, 0.22);
+  --dot: rgba(61, 43, 28, 0.1);
+  --hero-a: #ffdd9e;
+  --hero-b: #ffc472;
+  --hero-c: #f5a03f;
+  --hero-ink: #3d2b1c;
+  --hero-sub: #6c4514;
+  --hero-track: rgba(61, 43, 28, 0.15);
+  --hero-hl: rgba(255, 255, 255, 0.3);
+  --ins-a: #fffcf0;
+  --ins-b: #fff3db;
+  --heat0: #f7e8ce;
+  --heat1: #ffe3b8;
+  --heat2: #ffce8e;
+  --heat3: #f5a03f;
+  --heat4: #c4531a;
+  --blob1: #ffe7c4;
+  --blob2: #dcf3ed;
+  --blob3: #ebe6ff;
+  --t1: #f7ddb4;
+  --t1e: #c98a45;
+  --t1t: #7a4e15;
+  --t2: #e2e9f0;
+  --t2e: #8fa3b6;
+  --t2t: #41556a;
+  --t3: #ffe9a6;
+  --t3e: #d9a02a;
+  --t3t: #7a5205;
+  --t4: #ddf4ee;
+  --t4e: #2fb98c;
+  --t4t: #0f6e55;
+}
+
+/* ── 主题 2 · 夜读（深色） ───────────────────── */
+html[data-theme='night'] {
+  --bg: #181410;
+  --paper: #241e19;
+  --cream: #2b241e;
+  --warm: #33291f;
+  --ink: #f6eada;
+  --ink2: #c3b4a2;
+  --ink3: #8e7e6d;
+  --ham: #f3b25f;
+  --ham-l: #3b2f21;
+  --ham-d: #ffc87a;
+  --orange: #ff9263;
+  --orange-l: #3d2718;
+  --orange-d: #ffac81;
+  --mint: #4fd8ac;
+  --mint-l: #1e372f;
+  --mint-d: #6fe3bc;
+  --grape: #a79aff;
+  --grape-l: #2a2545;
+  --grape-d: #bcafff;
+  --berry: #ff8fb4;
+  --berry-l: #3a2029;
+  --sky: #6cb8ff;
+  --sky-l: #1c2c3e;
+  --line: #0b0806;
+  --onfill: #16100b;
+  --onink: #241e19;
+  --onink-veil: rgba(0, 0, 0, 0.14);
+  --pop-line: #050403;
+  --glare: rgba(255, 236, 206, 0.26);
+  --hair: #4a3d31;
+  --hair2: #45382c;
+  --hairline: rgba(246, 234, 218, 0.14);
+  --dot: rgba(246, 234, 218, 0.07);
+  --hero-a: #f7b860;
+  --hero-b: #ee9b3c;
+  --hero-c: #de8129;
+  --hero-ink: #2a1b0e;
+  --hero-sub: #5a3812;
+  --hero-track: rgba(42, 27, 14, 0.22);
+  --hero-hl: rgba(255, 255, 255, 0.18);
+  --ins-a: #2b241d;
+  --ins-b: #332a21;
+  --heat0: #2b241d;
+  --heat1: #4e3a22;
+  --heat2: #7e5826;
+  --heat3: #b98133;
+  --heat4: #f0a94b;
+  --blob1: #3a2a1a;
+  --blob2: #1e302b;
+  --blob3: #2a2740;
+  --t1: #4a3623;
+  --t1e: #c98a45;
+  --t1t: #f0c58c;
+  --t2: #2e3742;
+  --t2e: #8fa3b6;
+  --t2t: #cfdce8;
+  --t3: #4a3a17;
+  --t3e: #d9a02a;
+  --t3t: #f5d98a;
+  --t4: #1e3a33;
+  --t4e: #2fb98c;
+  --t4t: #8fe7c8;
+}
+
+/* ── 主题 3 · 薄荷晨间 ─────────────────────── */
+html[data-theme='mint'] {
+  --bg: #edf6f2;
+  --paper: #ffffff;
+  --cream: #fafefd;
+  --warm: #dbefe7;
+  --ink: #12332b;
+  --ink2: #4f6f66;
+  --ink3: #8da79f;
+  --ham: #ffd79a;
+  --ham-l: #fff3df;
+  --ham-d: #b97722;
+  --orange: #ff8a4c;
+  --orange-d: #c0521b;
+  --orange-l: #ffe7d8;
+  --mint: #2fb98c;
+  --mint-d: #0f7a5c;
+  --mint-l: #d9f3e9;
+  --grape: #7c6bf5;
+  --grape-d: #4f3fc7;
+  --grape-l: #eae6ff;
+  --berry: #ff6f97;
+  --berry-l: #ffe4ec;
+  --sky: #2e86de;
+  --sky-l: #ddebfb;
+  --line: #12332b;
+  --onfill: #12332b;
+  --onink: #fafefd;
+  --onink-veil: rgba(255, 255, 255, 0.16);
+  --pop-line: #0a241d;
+  --glare: rgba(255, 255, 255, 0.5);
+  --hair: #c6e0d7;
+  --hair2: #d2e7de;
+  --hairline: rgba(18, 51, 43, 0.2);
+  --dot: rgba(18, 51, 43, 0.1);
+  --hero-a: #159e7b;
+  --hero-b: #0f7a5c;
+  --hero-c: #0a5c45;
+  --hero-ink: #f4fffb;
+  --hero-sub: #c3e9dc;
+  --hero-track: rgba(244, 255, 251, 0.24);
+  --hero-hl: rgba(255, 255, 255, 0.14);
+  --ins-a: #f4fdfa;
+  --ins-b: #e4f5ef;
+  --heat0: #dbefe7;
+  --heat1: #a9dcc9;
+  --heat2: #63c4a6;
+  --heat3: #2fa585;
+  --heat4: #0f6e55;
+  --blob1: #d8f0e7;
+  --blob2: #dce9fb;
+  --blob3: #e6e0fa;
+  --t1: #f7ddb4;
+  --t1e: #c98a45;
+  --t1t: #7a4e15;
+  --t2: #e2e9f0;
+  --t2e: #8fa3b6;
+  --t2t: #41556a;
+  --t3: #ffe9a6;
+  --t3e: #d9a02a;
+  --t3t: #7a5205;
+  --t4: #ddf4ee;
+  --t4e: #2fb98c;
+  --t4t: #0f6e55;
+}

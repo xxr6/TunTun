@@ -1,0 +1,77 @@
+/* ============================================================
+   全局动画与装饰（迁移自 demo/index.html）
+   - blob 漂浮背景、入场 rise stagger、视图切换交叉溶解、主题呼吸、按钮涟漪
+   ============================================================ */
+
+/* ── 入场 rise（逐卡 stagger 浮现）── */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: riseIn 0.5s var(--ease-out-quart) both; }
+.rise:nth-child(1) { animation-delay: 0.04s; }
+.rise:nth-child(2) { animation-delay: 0.09s; }
+.rise:nth-child(3) { animation-delay: 0.14s; }
+.rise:nth-child(4) { animation-delay: 0.19s; }
+.rise:nth-child(5) { animation-delay: 0.24s; }
+.rise:nth-child(6) { animation-delay: 0.29s; }
+
+/* ── 装饰 blob 漂浮 ── */
+@keyframes float1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-28px, 24px) scale(1.06); }
+}
+@keyframes float2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -22px) scale(1.08); }
+}
+.deco { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.blob { position: absolute; border-radius: 50%; }
+.b1 { width: 520px; height: 520px; background: var(--blob1); top: -190px; right: -150px; animation: float1 22s ease-in-out infinite; }
+.b2 { width: 430px; height: 430px; background: var(--blob2); bottom: -170px; left: -130px; animation: float2 26s ease-in-out infinite; }
+.b3 { width: 300px; height: 300px; background: var(--blob3); top: 44%; left: 36%; animation: float1 19s ease-in-out infinite reverse; }
+
+/* ── 视图切换：交叉溶解（复刻 demo 的 viewIn/viewOut 配比）──
+   入场 460ms（quint）+ 70ms 延迟；离场 200ms（专用曲线，起手立刻掉）。
+   旧层用 position:absolute 脱流悬浮，两层 alpha 之和峰值压在 1.45 内，避免双重曝光。 */
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes viewOut {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-14px) scale(0.995); }
+}
+.view-enter-active { animation: viewIn 0.46s var(--ease-out-quint) 0.07s both; }
+.view-leave-active {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: viewOut 0.2s cubic-bezier(0.3, 0, 0.8, 0.15) both;
+}
+
+/* ── 主题切换呼吸 ── */
+html.theming .theming-fade { opacity: 0.55; filter: blur(2.5px); }
+
+/* ── 按钮点击涟漪 ── */
+@keyframes ripple {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.fx-rip { position: relative; overflow: hidden; isolation: isolate; }
+.fx-rip > .rip {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background: var(--ink);
+  opacity: 0.13;
+  transform: translate(-50%, -50%) scale(0);
+  animation: ripple 0.58s var(--ease-out-quart) forwards;
+}
+
+/* ── 图标 hover 轻动 ── */
+@keyframes iconNudge {
+  0% { transform: none; }
+  38% { transform: translateY(-2.5px) scale(1.1) rotate(-6deg); }
+  100% { transform: none; }
+}

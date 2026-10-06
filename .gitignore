@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# 数据与密钥
+.env
+.env.local
+data/
+*.db
+*.db-journal
+storage/
+
+# Node / 前端
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# 前端真机测试临时产物
+frontend/tests/.tmp-visual/
+frontend/tests/.tmp-upload/
+
+# 会话临时产物与调试残留
+.dsh-vision-toolkit/
+.workbuddy-memory-tmp
+_trash/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 日志
+*.log
+logs/
