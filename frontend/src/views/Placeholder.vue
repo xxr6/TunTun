@@ -1,6 +1,6 @@
 <template>
   <div class="card placeholder">
-    <el-icon class="ph-icon"><Collection /></el-icon>
+    <svg class="icon ph-icon" aria-hidden="true"><use href="#i-library" /></svg>
     <h2>{{ title }}</h2>
     <p>这个模块正在建设中，里程碑 M2 起陆续落地。</p>
   </div>
@@ -9,7 +9,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Collection } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const title = computed(() => (route.meta.title as string) || '模块')
@@ -23,7 +22,9 @@ const title = computed(() => (route.meta.title as string) || '模块')
   margin: 40px auto;
 }
 .ph-icon {
-  font-size: 44px;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
   color: var(--ink3);
 }
 h2 {

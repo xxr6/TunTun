@@ -276,9 +276,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import VuePdfEmbed from 'vue-pdf-embed'
 import { aiApi } from '@/api/ai'
 import { cardsApi } from '@/api/cards'
 import { cardQualityError } from '@/lib/cardQuality'
@@ -289,6 +288,9 @@ import HoldButton from '@/components/common/HoldButton.vue'
 import CreateDeckDialog from '@/components/common/CreateDeckDialog.vue'
 import type { Card, Deck, DocumentContent, FileItem, GeneratedCard } from '@/types/api'
 import logoUrl from '@/assets/logo.png'
+
+// 仅在阅读 PDF 时下载渲染器；普通文档进入阅读器无需加载 pdf.js。
+const VuePdfEmbed = defineAsyncComponent(() => import('vue-pdf-embed'))
 
 const route = useRoute()
 const router = useRouter()
@@ -756,10 +758,9 @@ async function saveCards() {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange)
-  await loadDecks()
-  await loadDocs()
+  void Promise.all([loadDecks(), loadDocs()])
 })
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFsChange)
