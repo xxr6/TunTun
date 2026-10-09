@@ -235,11 +235,12 @@ async function loadData() {
   loading.value = true
   error.value = ''
   try {
+    const supplemental = Promise.allSettled([statsApi.heatmap(), reviewApi.forecast(14)])
     dash.value = (await statsApi.dashboard()).data
     await nextTick()
     observeBadges()
     if (window.location.hash === '#badge-title') badgeSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    const [heatResult, forecastResult] = await Promise.allSettled([statsApi.heatmap(), reviewApi.forecast(14)])
+    const [heatResult, forecastResult] = await supplemental
     if (heatResult.status === 'fulfilled') heatmap.value = heatResult.value.data
     if (forecastResult.status === 'fulfilled') forecast.value = forecastResult.value.data
   } catch {
