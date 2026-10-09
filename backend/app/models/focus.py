@@ -3,13 +3,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Float, ForeignKey, Integer, String, Uuid
+from sqlalchemy import JSON, Float, ForeignKey, Integer, String, Uuid, Boolean, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UTCDateTime, uuid_pk
 
-# 专注模式：pomodoro 啃25 / deep 深啃50 / nap 打盹5 / custom 自定义
-FOCUS_MODES = ("pomodoro", "deep", "nap", "custom")
+# 专注模式：番茄、深度、休息、自定义倒计时、正向计时
+FOCUS_MODES = ("pomodoro", "deep", "nap", "custom", "countup")
 
 
 class FocusSession(Base, TimestampMixin):
@@ -25,6 +25,8 @@ class FocusSession(Base, TimestampMixin):
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     # 番茄钟是否完整走完（未走完也可记录，completed=False 表示中途放弃）
     completed: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # 主动打断并结束：已专注时长计入统计，但不算完成一颗番茄
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     # 「这一轮啃什么」的卡组快照：记录会话当时的卡组 id 与名称，允许为空
     deck_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True, index=True

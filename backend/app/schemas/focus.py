@@ -7,11 +7,13 @@ from pydantic import BaseModel, ConfigDict
 
 
 class FocusSessionCreate(BaseModel):
-    mode: Literal["pomodoro", "deep", "nap", "custom"] = "pomodoro"
+    id: uuid.UUID | None = None  # 客户端重试时沿用同一 ID，避免重复计时
+    mode: Literal["pomodoro", "deep", "nap", "custom", "countup"] = "pomodoro"
     started_at: datetime
     ended_at: datetime
     duration_seconds: int
     completed: bool = True
+    interrupted: bool = False
     deck_id: uuid.UUID | None = None
     deck_name: str = ""
 
@@ -25,6 +27,7 @@ class FocusSessionOut(BaseModel):
     ended_at: datetime
     duration_seconds: int
     completed: bool
+    interrupted: bool
     deck_id: uuid.UUID | None
     deck_name: str
 

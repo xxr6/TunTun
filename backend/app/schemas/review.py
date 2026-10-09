@@ -1,6 +1,7 @@
 """复习相关输入输出模型。"""
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -35,11 +36,14 @@ class ReviewCard(BaseModel):
     state: str
     reps: int
     due: datetime
+    source_file_id: uuid.UUID | None = None
+    source_locator: dict[str, Any] | None = None
 
 
 class ReviewQueueOut(BaseModel):
     items: list[ReviewCard]
     remaining_today: int
+    needs_repair: int = 0
 
 
 class ReviewUndoOut(BaseModel):

@@ -1,247 +1,228 @@
 <template>
-  <div>
-    <div class="st-head rise">
+  <div class="stats-page">
+    <header class="stats-head rise">
       <div>
-        <div class="h-page">统计</div>
-        <div class="h-sub">过去 12 周，时间都花在哪儿了</div>
+        <h1 class="h-page">统计</h1>
+        <p class="h-sub">看看时间花在哪里，也看看知识积累了多少。</p>
       </div>
-      <span class="chip chip-g" title="专注目标现在写死在统计里，设置页做好后可改">目标可在设置里改</span>
-    </div>
+      <button class="btn" :disabled="loading" @click="loadData">{{ loading ? '刷新中…' : '刷新数据' }}</button>
+    </header>
 
-    <!-- ── 专注时长三卡 ── -->
-    <div class="sec-head rise"><span class="h-sec">专注时长</span></div>
-    <div class="focus-grid rise">
-      <div v-for="card in focusCards" :key="card.key" class="card fcard2" :data-tone="card.tone">
-        <div class="f-top">
-          <span class="f-ic"><svg class="icon"><use :href="card.icon" /></svg></span>
-          <span class="f-label">{{ card.label }}</span>
+    <div v-if="loading && !dash" class="card stats-state" role="status">正在整理你的学习记录…</div>
+    <div v-else-if="error && !dash" class="card stats-state" role="alert">
+      <p>{{ error }}</p><button class="btn btn-primary" @click="loadData">重试</button>
+    </div>
+    <template v-else-if="dash">
+      <section aria-label="专注时长">
+        <div class="stats-section-head"><h2 class="h-sec">专注时间</h2><span>点选时段，查看相应内容占比</span></div>
+        <div class="period-grid">
+          <button v-for="p in periods" :key="p.key" class="card period-card" type="button"
+                  :class="{ selected: period === p.key }" :aria-pressed="period === p.key" @click="period = p.key">
+            <span class="period-label">{{ p.label }} <span aria-hidden="true">{{ p.icon }}</span></span>
+            <strong>{{ formatDuration(dash.focus[p.key].sec) }}</strong>
+            <span class="period-goal">目标 {{ formatDuration(dash.focus[p.key].goal) }} · {{ goalPercent(dash.focus[p.key]) }}</span>
+            <span class="period-progress" aria-hidden="true"><i :style="{ width: `${dash.focus[p.key].sec > 0 ? Math.max(2, Math.min(100, dash.focus[p.key].pct)) : 0}%` }"></i></span>
+          </button>
         </div>
-        <div class="f-num" :class="'tone-' + card.tone">{{ fmtH(dash.focus[card.key].sec) }}</div>
-        <div class="f-goal">
-          目标 {{ fmtH(dash.focus[card.key].goal) }} · {{ card.goalNote }}
+      </section>
+
+      <section class="card topic-panel rise" aria-labelledby="topic-title">
+        <div class="topic-head">
+          <div><h2 id="topic-title" class="h-sec">专注内容占比</h2><p>{{ activePeriod.label }}共 {{ formatDuration(activeBlock.sec) }} · {{ comparisonText }}</p></div>
         </div>
-        <div class="f-bar"><i :style="{ width: dash.focus[card.key].pct + '%' }"></i></div>
-        <div class="f-prev">
-          <template v-if="dash.focus[card.key].prev_pct !== null">
-            <span :class="dash.focus[card.key].prev_pct! >= 0 ? 'up' : 'down'">
-              {{ dash.focus[card.key].prev_pct! >= 0 ? '↑' : '↓' }}
-              比{{ card.prevName }}{{ Math.abs(dash.focus[card.key].prev_pct!) }}%
-            </span>
-          </template>
-          <span v-else class="muted-s">还没有{{ card.prevName }}的记录</span>
-        </div>
-        <div class="f-bars">
-          <div v-for="b in card.bars" :key="b.label" class="f-bar-col" :title="b.label + ' ' + b.min + ' 分钟'">
-            <i :style="{ height: b.h + '%' }" :class="{ hot: b.hot }"></i>
-            <small>{{ b.label }}</small>
+        <div v-if="topicSlices.length" class="topic-content">
+          <div class="topic-chart-wrap">
+            <VChart class="topic-chart" :option="pieOption" :init-options="{ renderer: 'svg' }" autoresize role="img" :aria-label="`${activePeriod.label}专注内容时间占比图`" />
+            <div class="topic-chart-center" aria-hidden="true"><strong>{{ formatDuration(activeBlock.sec) }}</strong><small>{{ activePeriod.label }}专注</small></div>
           </div>
+          <ol class="topic-list">
+            <li v-for="(item, index) in topicSlices" :key="item.name">
+              <span class="topic-name"><i :style="{ background: pieColors[index % pieColors.length] }"></i><span :title="item.name">{{ item.name }}</span></span>
+              <span class="topic-time">{{ formatTopicDuration(item.sec) }}</span>
+              <strong>{{ percentage(item.sec) }}%</strong>
+            </li>
+          </ol>
         </div>
-      </div>
-    </div>
-
-    <!-- ── 指标行 ── -->
-    <div class="metric-grid rise">
-      <div class="card mcard">
-        <div class="m-label">累计复习</div>
-        <div class="m-num">{{ dash.metrics.total_reviews.toLocaleString() }}</div>
-        <div class="m-sub muted-s">次</div>
-      </div>
-      <div class="card mcard">
-        <div class="m-label">平均正确率</div>
-        <div class="m-num tone-mint">{{ dash.metrics.accuracy_30d }}%</div>
-        <div class="m-sub muted-s">近 30 天 · 评分「想起来了」及以上</div>
-      </div>
-      <div class="card mcard">
-        <div class="m-label">囤了多少</div>
-        <div class="m-num">{{ dash.metrics.cards_total.toLocaleString() }}</div>
-        <div class="m-sub muted-s">张卡片在库里</div>
-      </div>
-      <div class="card mcard">
-        <div class="m-label">AI 用量</div>
-        <div class="m-num tone-orange">{{ dash.metrics.ai_calls_month }} 次</div>
-        <div class="m-sub muted-s">本月调用 · 免费模型额度内</div>
-      </div>
-    </div>
-
-    <!-- ── 复习热力图 ── -->
-    <div class="card pad rise" style="margin-top:18px">
-      <div class="hm-head">
-        <span class="h-sec">复习热力图</span>
-        <span class="hm-legend">少 <i v-for="l in 5" :key="l" class="hm-cell" :class="'heat' + (l - 1)"></i> 多</span>
-      </div>
-      <div class="hm-grid">
-        <div v-for="(week, wi) in heatWeeks" :key="wi" class="hm-col">
-          <i v-for="cell in week" :key="cell.date" class="hm-cell" :class="'heat' + heatLevel(cell.count)"
-             :title="cell.date + ' · ' + cell.count + ' 次'"></i>
+        <div v-else class="topic-empty">
+          <strong>{{ activePeriod.label }}还没有专注记录</strong>
+          <p>选一个卡组或写下专注内容，完成一轮后就能看到时间分布。</p>
+          <button class="btn btn-primary" @click="router.push('/focus')">开始专注</button>
         </div>
-      </div>
-    </div>
+        <p v-if="topicSlices.length" class="topic-note">{{ topicHint }}</p>
+        <p v-if="focusStore.hasActiveSession" class="topic-note">正在进行的这一轮，会在结束并保存后计入统计。</p>
+      </section>
 
-    <!-- ── 遗忘曲线 ── -->
-    <div class="card pad rise" style="margin-top:18px">
-      <div class="fc-head">
-        <div>
-          <span class="h-sec">遗忘曲线</span>
-          <div class="muted-s" style="margin-top:2px">同一批卡片，复习与不复习的差别（按你的平均稳定性推算）</div>
+      <section class="review-overview rise" aria-label="学习概览">
+        <div class="stats-section-head"><h2 class="h-sec">学习概览</h2><span>和专注时间分开看，避免把不同指标混在一起</span></div>
+        <div class="learning-grid">
+          <div class="card learning-card"><span>累计复习</span><strong>{{ dash.metrics.total_reviews.toLocaleString() }}</strong><small>次</small></div>
+          <div class="card learning-card"><span>近 30 天正确率</span><strong>{{ dash.metrics.accuracy_30d }}%</strong><small>按复习评分计算</small></div>
+          <div class="card learning-card"><span>卡片库存</span><strong>{{ dash.metrics.cards_total.toLocaleString() }}</strong><small>张</small></div>
+          <div class="card learning-card"><span>未来 7 天到期</span><strong>{{ dueNextWeek }}</strong><small>张 · <button @click="router.push('/review')">去复习 →</button></small></div>
         </div>
-        <div class="fc-legend">
-          <span><i class="lg-dot" style="background:var(--berry)"></i>不复习的话</span>
-          <span><i class="lg-dot" style="background:var(--mint)"></i>按计划复习</span>
+      </section>
+
+      <section ref="badgeSection" class="badge-section rise" :class="{ 'is-visible': badgesVisible }" aria-labelledby="badge-title">
+        <div class="stats-section-head"><h2 id="badge-title" class="h-sec">徽章收藏</h2><span>{{ unlockedCount }} / {{ dash.achievements.length }} 已解锁 · 点击徽章查看进度</span></div>
+        <div class="badge-filters" role="group" aria-label="按主题筛选徽章">
+          <button v-for="group in badgeGroups" :key="group" type="button" :class="{ active: badgeGroup === group }"
+                  :aria-pressed="badgeGroup === group" @click="badgeGroup = group">{{ group }}</button>
         </div>
-      </div>
-      <svg viewBox="0 0 640 220" class="fc-svg" role="img" aria-label="遗忘曲线示意图">
-        <line v-for="g in [0, 25, 50, 75, 100]" :key="g" x1="36" :y1="gy(g)" x2="632" :y2="gy(g)"
-              stroke="var(--hairline)" stroke-width="1" stroke-dasharray="4 4" />
-        <text v-for="g in [0, 25, 50, 75, 100]" :key="'t' + g" x="30" :y="gy(g) + 4" text-anchor="end"
-              class="fc-tick">{{ g }}%</text>
-        <path :d="forgetPath" fill="none" stroke="var(--berry)" stroke-width="2.5" stroke-linecap="round" />
-        <path :d="planPath" fill="none" stroke="var(--mint)" stroke-width="2.5" stroke-linecap="round" />
-        <circle v-for="(p, i) in planResetPts" :key="i" :cx="p.x" :cy="p.y" r="4"
-                fill="var(--mint)" stroke="var(--paper)" stroke-width="1.5" />
-        <text v-for="d in [0, 1, 3, 7, 14, 30]" :key="'d' + d" :x="fx(d)" y="214" text-anchor="middle"
-              class="fc-tick">{{ d }}天</text>
-      </svg>
-      <div class="fc-stats">
-        <div class="fc-stat"><small>当期平均保留率</small><b class="tone-mint">90%</b></div>
-        <div class="fc-stat"><small>平均记忆稳定性</small><b>{{ stabilityDays }} 天</b></div>
-        <div class="fc-stat"><small>最佳复习时机</small><b class="tone-orange">保留率 ~75%</b></div>
-        <div class="fc-stat"><small>30 天后差距</small><b class="tone-orange">{{ planAt30 }}% vs {{ freeAt30 }}%</b></div>
-      </div>
-    </div>
-
-    <!-- ── 14 天预测 + 卡组健康度 ── -->
-    <div class="two-grid rise">
-      <div class="card pad">
-        <div class="h-sec" style="margin-bottom:12px">未来 14 天到期预测</div>
-        <div class="f-bars" style="height:110px">
-          <div v-for="d in forecast" :key="d.date" class="f-bar-col fc-bar" :title="d.date + ' · ' + d.count + ' 张到期'">
-            <i :style="{ height: barH(d.count, forecastMax) + '%' }"></i>
-            <small>{{ Number(d.date.slice(-2)) }}</small>
-          </div>
+        <div :key="badgeGroup" class="badge-grid">
+          <button v-for="(a, index) in visibleBadges" :key="a.name" type="button" class="badge-card card"
+                  :style="{ '--badge-order': Math.min(index, 11) }"
+                  :class="{ earned: a.unlocked }" :aria-label="`${a.name}，${a.unlocked ? '已解锁' : `进度 ${a.progress} / ${a.target}`}`"
+                  @click="selectedBadge = a">
+            <span class="badge-art"><img :src="badgeArt[a.name]" :alt="`${a.name}徽章`" loading="lazy" /></span>
+            <strong>{{ a.name }}</strong>
+            <span class="badge-card-bottom"><small>{{ a.group }} · {{ a.rarity }}</small><small>{{ a.unlocked ? '已获得' : `${a.progress}/${a.target}` }}</small></span>
+          </button>
         </div>
-      </div>
-      <div class="card pad">
-        <div class="h-sec" style="margin-bottom:6px">卡组健康度</div>
-        <div class="muted-s" style="margin-bottom:10px">毕业卡占比——进入长期复习的卡片越多越健康</div>
-        <div v-if="!dash.deck_health.length" class="muted-s">还没有卡组数据。</div>
-        <div v-for="d in dash.deck_health" :key="d.name" class="dh-row">
-          <div class="dh-top"><span class="dh-name">{{ d.name }}</span><span class="dh-pct" :class="healthTone(d.pct)">{{ d.pct }}%</span></div>
-          <div class="dh-bar"><i :style="{ width: d.pct + '%' }" :class="healthTone(d.pct)"></i></div>
+      </section>
+
+      <details class="card more-stats rise">
+        <summary>更多学习记录 <span>复习热力图 · 卡组进展</span></summary>
+        <div class="more-body">
+          <section v-if="heatWeeks.length" class="more-section">
+            <h3>最近 12 周复习</h3>
+            <div class="heatmap" aria-label="最近 12 周复习热力图">
+              <div v-for="(week, wi) in heatWeeks" :key="wi" class="heat-week">
+                <span v-for="cell in week" :key="cell.date" class="heat-cell" :class="`heat-${heatLevel(cell.count)}`"
+                      :title="`${cell.date} · ${cell.count} 次复习`"></span>
+              </div>
+            </div>
+          </section>
+          <section class="more-section">
+            <h3>卡组进展</h3>
+            <p v-if="!dash.deck_health.length" class="muted">还没有可以统计的卡组。</p>
+            <div v-for="deck in dash.deck_health" :key="deck.name" class="deck-health">
+              <span>{{ deck.name }}</span><span class="health-track"><i :style="{ width: `${deck.pct}%` }"></i></span><b>{{ deck.pct }}%</b>
+            </div>
+            <p v-if="dash.deck_health.length" class="muted">百分比表示已进入长期复习的卡片比例。</p>
+          </section>
         </div>
+      </details>
+      <p class="stats-footnote">专注统计包含完整结束与打断后保存的时长；重置和打盹不计入。时间按会话开始日期归属。</p>
+      <p v-if="error" class="stats-footnote" role="status">{{ error }}</p>
+    </template>
+    <Transition name="badge-detail">
+    <div v-if="selectedBadge" class="badge-dialog-backdrop" @click.self="selectedBadge = null">
+      <div class="badge-dialog card" role="dialog" aria-modal="true" :aria-label="`${selectedBadge.name}徽章详情`">
+        <button class="badge-dialog-close" type="button" aria-label="关闭徽章详情" @click="selectedBadge = null">×</button>
+        <img :class="{ locked: !selectedBadge.unlocked }" :src="badgeArt[selectedBadge.name]" :alt="`${selectedBadge.name}徽章`" />
+        <span class="badge-dialog-group">{{ selectedBadge.group }} · {{ selectedBadge.rarity }}徽章</span>
+        <h2>{{ selectedBadge.name }}</h2>
+        <p>{{ selectedBadge.desc }}</p>
+        <strong :class="{ unlocked: selectedBadge.unlocked }">{{ selectedBadge.unlocked ? '✦ 已解锁' : `进度 ${selectedBadge.progress} / ${selectedBadge.target}` }}</strong>
+        <span v-if="!selectedBadge.unlocked" class="badge-dialog-progress"><i :style="{ width: `${Math.min(100, selectedBadge.progress / selectedBadge.target * 100)}%` }"></i></span>
       </div>
     </div>
-
-    <!-- ── 成就勋章 ── -->
-    <div class="ach-head rise">
-      <span class="h-sec">成就勋章</span>
-      <span class="chip chip-g">{{ unlockedCount }} / {{ dash.achievements.length }}</span>
-    </div>
-    <div class="muted-s rise" style="margin:-6px 0 12px">四组共 {{ dash.achievements.length }} 枚 · 稀有度越高越难拿</div>
-
-    <!-- 收藏柜 -->
-    <div class="card pad rise ach-cabinet">
-      <div class="cab-main">
-        <div class="cab-num">{{ unlockedCount }}<small> / {{ dash.achievements.length }}</small></div>
-        <div class="cab-sub">枚勋章已解锁 · 收藏柜完成度 {{ cabinetPct }}%</div>
-        <div class="cab-bar"><i :style="{ width: cabinetPct + '%' }"></i></div>
-      </div>
-      <div class="cab-next">
-        <small>离下一枚还差</small>
-        <b>{{ nextAchievement?.name || '全部解锁！' }}</b>
-        <div class="cab-next-bar"><i :style="{ width: nextPct + '%' }"></i></div>
-        <small class="muted-s">{{ nextAchievement ? nextProgressText : '你就是满级囤囤玩家' }}</small>
-      </div>
-    </div>
-
-    <!-- 最近解锁 -->
-    <div v-if="latestUnlocked" class="card pad rise latest-card">
-      <div class="hex" :class="'r-' + latestUnlocked.rarity">
-        <svg class="icon"><use :href="latestUnlocked.icon" /></svg>
-      </div>
-      <div class="latest-body">
-        <small class="muted-s">最近解锁</small>
-        <div class="latest-name">{{ latestUnlocked.name }}</div>
-        <div class="latest-desc">{{ latestUnlocked.desc }}</div>
-      </div>
-      <span class="chip" :class="rarityChip(latestUnlocked.rarity)">{{ latestUnlocked.rarity }}章</span>
-    </div>
-
-    <!-- 分组徽章 -->
-    <div v-for="g in groupedAch" :key="g.name" class="ach-group rise">
-      <div class="ach-group-head">
-        <span class="ach-group-name">{{ g.name }} <b>{{ g.unlocked }}/{{ g.items.length }}</b></span>
-        <span class="ach-group-progress" :style="{ '--p': (g.unlocked / g.items.length * 100) + '%' }"></span>
-      </div>
-      <div class="ach-grid">
-        <div v-for="a in g.items" :key="a.name" class="card ach-card" :class="{ locked: !a.unlocked }" :title="a.desc">
-          <span class="ach-rarity" :class="rarityChip(a.rarity)">{{ a.rarity }}章</span>
-          <div class="hex" :class="a.unlocked ? 'r-' + a.rarity : 'r-locked'">
-            <svg class="icon"><use :href="a.icon" /></svg>
-          </div>
-          <div class="ach-name">{{ a.name }}</div>
-          <div class="ach-desc">{{ a.unlocked ? a.desc : progressText(a) }}</div>
-          <div class="ach-bar"><i :style="{ width: (a.progress / a.target * 100) + '%' }"></i></div>
-        </div>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { PieChart } from 'echarts/charts'
+import { SVGRenderer } from 'echarts/renderers'
 import { reviewApi } from '@/api/review'
 import { statsApi } from '@/api/stats'
-import type { StatsDashboard } from '@/types/api'
+import { useFocusStore } from '@/stores/focus'
+import { badgeArt, type Badge } from '@/lib/badges'
+import type { FocusBlock, StatsDashboard } from '@/types/api'
 
-const dash = ref<StatsDashboard>({
-  focus: {
-    today: { sec: 0, goal: 10800, pct: 0, prev_pct: null },
-    week: { sec: 0, goal: 72000, pct: 0, prev_pct: null },
-    month: { sec: 0, goal: 288000, pct: 0, prev_pct: null },
-    dist_today: {}, dist_week: {}, dist_month: {},
-  },
-  metrics: { total_reviews: 0, accuracy_30d: 0, cards_total: 0, ai_calls_month: 0 },
-  avg_stability: null,
-  deck_health: [],
-  achievements: [],
-})
+use([PieChart, SVGRenderer])
+
+type Period = 'today' | 'week' | 'month'
+const periods: { key: Period; label: string; short: string; icon: string }[] = [
+  { key: 'today', label: '今日专注', short: '今日', icon: '☀' },
+  { key: 'week', label: '本周专注', short: '本周', icon: '✦' },
+  { key: 'month', label: '本月专注', short: '本月', icon: '◷' },
+]
+const pieColors = ['#f49b54', '#7f73d9', '#56b899', '#f2c46d', '#68a5d9', '#d9859f', '#aea7a1']
+const router = useRouter()
+const focusStore = useFocusStore()
+const dash = ref<StatsDashboard | null>(null)
+const period = ref<Period>('today')
+const loading = ref(false)
+const error = ref('')
 const heatmap = ref<{ date: string; count: number }[]>([])
 const forecast = ref<{ date: string; count: number }[]>([])
+const badgeGroup = ref('全部')
+const selectedBadge = ref<Badge | null>(null)
+const badgeSection = ref<HTMLElement | null>(null)
+const badgesVisible = ref(false)
+let badgeObserver: IntersectionObserver | null = null
+const badgeGroups = ['全部', '坚持', '积累', '专注', '番茄钟', '提炼', '学习', '签到']
 
-/* ── 专注三卡 ── */
-const focusCards = computed(() => {
-  const d = dash.value.focus
-  const barsOf = (dist: Record<string, number>, labels: string[]) => {
-    const max = Math.max(1, ...labels.map((l) => dist[l] || 0))
-    return labels.map((l) => ({
-      label: l,
-      min: Math.round((dist[l] || 0) / 60),
-      h: Math.round((dist[l] || 0) / max * 100),
-      hot: (dist[l] || 0) === max && (dist[l] || 0) > 0,
-    }))
-  }
-  const hourLabels = Array.from({ length: 18 }, (_, i) => String(i + 6)) // 6~23 点
-  return [
-    { key: 'today' as const, tone: 'orange', label: '今日专注', icon: '#i-flame', goalNote: '今日目标', prevName: '昨天',
-      bars: barsOf(d.dist_today, hourLabels) },
-    { key: 'week' as const, tone: 'mint', label: '本周专注', icon: '#i-calendar', goalNote: '周目标', prevName: '上周',
-      bars: barsOf(d.dist_week, ['一', '二', '三', '四', '五', '六', '日']) },
-    { key: 'month' as const, tone: 'grape', label: '本月专注', icon: '#i-target', goalNote: '月目标', prevName: '上月',
-      bars: barsOf(d.dist_month, ['第1期', '第2期', '第3期', '第4期', '第5期']) },
-  ]
+const activePeriod = computed(() => periods.find((p) => p.key === period.value)!)
+const emptyBlock: FocusBlock = { sec: 0, goal: 0, pct: 0, prev_pct: null }
+const activeBlock = computed(() => dash.value?.focus[period.value] ?? emptyBlock)
+const allTopics = computed(() => dash.value?.focus.topics?.[period.value] ?? [])
+const topicSlices = computed(() => {
+  const values = allTopics.value.filter((item) => item.sec > 0)
+  if (values.length <= 6) return values
+  return [...values.slice(0, 6), { name: '其他内容', sec: values.slice(6).reduce((sum, item) => sum + item.sec, 0) }]
 })
-
-/* ── 热力图：91 天 → 按周分列 ── */
+const pieOption = computed(() => ({
+  color: pieColors,
+  animationDuration: 600,
+  animationDurationUpdate: 380,
+  series: [{
+    type: 'pie' as const, radius: ['62%', '82%'], center: ['50%', '50%'],
+    avoidLabelOverlap: true, label: { show: false }, labelLine: { show: false },
+    emphasis: { scale: true, scaleSize: 5 },
+    data: topicSlices.value.map((item) => ({ name: item.name, value: item.sec })),
+  }],
+}))
+const comparisonText = computed(() => {
+  if (activeBlock.value.sec === 0) return '本时段尚无专注记录'
+  const diff = activeBlock.value.prev_pct
+  if (diff === null) return '暂无上期可比记录'
+  const previous = period.value === 'today' ? '昨天' : period.value === 'week' ? '上周' : '上月'
+  if (diff === 0) return `与${previous}持平`
+  return `比${previous}${diff > 0 ? '多' : '少'} ${Math.abs(diff)}%`
+})
+const topicHint = computed(() => {
+  const unnamed = allTopics.value.find((item) => item.name === '未指定')?.sec ?? 0
+  if (unnamed > 0) return `其中 ${formatDuration(unnamed)} 未指定内容。下次专注时可以选卡组或写下目标，让分布更有参考价值。`
+  return '图中按专注内容汇总；相同名称会合并，超过六项时其余归入“其他内容”。'
+})
+const dueNextWeek = computed(() => forecast.value.slice(0, 7).reduce((sum, item) => sum + item.count, 0))
+const unlockedCount = computed(() => dash.value?.achievements.filter((a) => a.unlocked).length ?? 0)
+const visibleBadges = computed(() => (dash.value?.achievements ?? []).filter((a) => badgeGroup.value === '全部' || a.group === badgeGroup.value))
 const heatWeeks = computed(() => {
-  const cols: { date: string; count: number }[][] = []
-  let cur: { date: string; count: number }[] = []
-  for (const cell of heatmap.value) {
-    cur.push(cell)
-    if (cur.length === 7) { cols.push(cur); cur = [] }
-  }
-  if (cur.length) cols.push(cur)
-  return cols
+  const weeks: typeof heatmap.value[] = []
+  for (let i = 0; i < heatmap.value.length; i += 7) weeks.push(heatmap.value.slice(i, i + 7))
+  return weeks
 })
+
+
+function formatDuration(sec: number) {
+  if (sec <= 0) return '0 分钟'
+  if (sec < 60) return `${sec} 秒`
+  const roundedMinutes = Math.round(sec / 60)
+  const hours = Math.floor(roundedMinutes / 60)
+  const minutes = roundedMinutes % 60
+  if (!hours) return `${minutes} 分钟`
+  return minutes ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
+}
+function formatTopicDuration(sec: number) {
+  if (sec < 60) return `${sec} 秒`
+  const minutes = Math.floor(sec / 60)
+  const seconds = sec % 60
+  return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分钟`
+}
+function goalPercent(block: FocusBlock) {
+  if (block.sec > 0 && block.pct === 0) return '<1%'
+  return `${block.pct}%`
+}
+function percentage(sec: number) {
+  return activeBlock.value.sec > 0 ? Math.round(sec / activeBlock.value.sec * 100) : 0
+}
 function heatLevel(count: number) {
   if (count <= 0) return 0
   if (count <= 2) return 1
@@ -249,283 +230,154 @@ function heatLevel(count: number) {
   if (count <= 9) return 3
   return 4
 }
-
-/* ── 遗忘曲线（FSRS 理论曲线，按平均稳定性推算）── */
-const S = computed(() => Math.max(1, dash.value.avg_stability ?? 5))
-const RESETS = [1, 3, 7, 14] // 按计划复习的重置点（天）
-const W = 640, H = 220, PAD_L = 36, PAD_B = 24, TOP = 12
-const fx = (t: number) => PAD_L + (t / 30) * (W - PAD_L - 8)
-const gy = (pct: number) => TOP + (1 - pct / 100) * (H - TOP - PAD_B)
-// 不复习：R = 100·e^(-t/S)
-const forgetPath = computed(() => {
-  const pts: string[] = []
-  for (let t = 0; t <= 30; t += 0.5) {
-    const r = 100 * Math.exp(-t / S.value)
-    pts.push(`${pts.length ? 'L' : 'M'}${fx(t).toFixed(1)} ${gy(r).toFixed(1)}`)
+async function loadData() {
+  if (loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    dash.value = (await statsApi.dashboard()).data
+    await nextTick()
+    observeBadges()
+    if (window.location.hash === '#badge-title') badgeSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const [heatResult, forecastResult] = await Promise.allSettled([statsApi.heatmap(), reviewApi.forecast(14)])
+    if (heatResult.status === 'fulfilled') heatmap.value = heatResult.value.data
+    if (forecastResult.status === 'fulfilled') forecast.value = forecastResult.value.data
+  } catch {
+    error.value = '统计暂时没有加载成功，请稍后重试。'
+  } finally {
+    loading.value = false
   }
-  return pts.join(' ')
-})
-// 按计划：每段从 90% 衰减，到重置点跳回（复习瞬间恢复）
-const planSegs = computed(() => {
-  const pts: { t: number; r: number }[] = [{ t: 0, r: 100 }]
-  let last = { t: 0, r: 100 }
-  for (const tr of RESETS) {
-    for (let t = last.t + 0.25; t <= tr; t += 0.25) {
-      pts.push({ t, r: last.r * Math.exp(-(t - last.t) / S.value) })
+}
+function observeBadges() {
+  if (!badgeSection.value || badgesVisible.value) return
+  if (!('IntersectionObserver' in window)) { badgesVisible.value = true; return }
+  badgeObserver?.disconnect()
+  badgeObserver = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      badgesVisible.value = true
+      badgeObserver?.disconnect()
+      badgeObserver = null
     }
-    pts.push({ t: tr, r: 90 })
-    last = { t: tr, r: 90 }
-  }
-  for (let t = last.t + 0.25; t <= 30; t += 0.25) {
-    pts.push({ t, r: last.r * Math.exp(-(t - last.t) / S.value) })
-  }
-  return pts
-})
-const planPath = computed(() =>
-  planSegs.value.map((p, i) => `${i ? 'L' : 'M'}${fx(p.t).toFixed(1)} ${gy(p.r).toFixed(1)}`).join(' '))
-const planResetPts = computed(() => {
-  const seen: { x: number; y: number }[] = []
-  let last = { t: 0, r: 100 }
-  for (const tr of RESETS) {
-    const rBefore = last.r * Math.exp(-(tr - last.t) / S.value)
-    seen.push({ x: fx(tr), y: gy(rBefore) })
-    last = { t: tr, r: 90 }
-  }
-  return seen
-})
-const planAt30 = computed(() => Math.round(planSegs.value[planSegs.value.length - 1].r))
-const freeAt30 = computed(() => Math.round(100 * Math.exp(-30 / S.value)))
-const stabilityDays = computed(() => Math.round(S.value * 10) / 10)
-
-/* ── 成就 ── */
-const unlockedCount = computed(() => dash.value.achievements.filter((a) => a.unlocked).length)
-const cabinetPct = computed(() =>
-  dash.value.achievements.length
-    ? Math.round(unlockedCount.value / dash.value.achievements.length * 100)
-    : 0)
-const groupedAch = computed(() => {
-  const map = new Map<string, typeof dash.value.achievements>()
-  for (const a of dash.value.achievements) {
-    if (!map.has(a.group)) map.set(a.group, [])
-    map.get(a.group)!.push(a)
-  }
-  return [...map.entries()].map(([name, items]) => ({
-    name,
-    items,
-    unlocked: items.filter((a) => a.unlocked).length,
-  }))
-})
-const latestUnlocked = computed(() => {
-  const list = dash.value.achievements.filter((a) => a.unlocked)
-  return list.length ? list[list.length - 1] : null
-})
-const nextAchievement = computed(() =>
-  dash.value.achievements
-    .filter((a) => !a.unlocked)
-    .sort((x, y) => y.progress / y.target - x.progress / x.target)[0] ?? null)
-const nextPct = computed(() =>
-  nextAchievement.value ? Math.round(nextAchievement.value.progress / nextAchievement.value.target * 100) : 100)
-const nextProgressText = computed(() => {
-  const a = nextAchievement.value
-  if (!a) return ''
-  return a.name.includes('仓') || a.name.includes('拆解') || a.name.includes('笔记')
-    ? `${a.progress} / ${a.target}`
-    : `还差 ${a.target - a.progress} 天`
-})
-function progressText(a: { progress: number; target: number }) {
-  return `${a.progress} / ${a.target}`
+  }, { threshold: 0.08, rootMargin: '0px 0px -24px 0px' })
+  badgeObserver.observe(badgeSection.value)
 }
-function rarityChip(r: string) {
-  return { 铜: 'chip-r-copper', 银: 'chip-r-silver', 金: 'chip-r-gold', 钻: 'chip-r-diamond' }[r] ?? 'chip-g'
+function onBadgeKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') selectedBadge.value = null
 }
-function healthTone(pct: number) {
-  return pct >= 80 ? 'ok' : pct >= 50 ? 'mid' : 'low'
-}
-
-/* ── 工具 ── */
-function fmtH(sec: number) {
-  return (sec / 3600).toFixed(1) + 'h'
-}
-function barH(count: number, max: number) {
-  return max > 0 ? Math.round(count / max * 100) : 0
-}
-const forecastMax = computed(() => Math.max(1, ...forecast.value.map((d) => d.count)))
-
-onMounted(async () => {
-  const [d, hm, fc] = await Promise.all([
-    statsApi.dashboard(),
-    statsApi.heatmap(),
-    reviewApi.forecast(14).catch(() => ({ data: [] as { date: string; count: number }[] })),
-  ])
-  dash.value = d.data
-  heatmap.value = hm.data
-  forecast.value = fc.data
-})
+onMounted(() => { loadData(); window.addEventListener('keydown', onBadgeKeydown) })
+onUnmounted(() => { badgeObserver?.disconnect(); window.removeEventListener('keydown', onBadgeKeydown) })
 </script>
 
 <style scoped>
-.st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.h-sec { font-size: 15px; font-weight: 800; }
-.muted-s { color: var(--ink3); font-size: 12px; font-weight: 600; }
-.tone-orange { color: var(--orange-d); }
-.tone-mint { color: var(--mint-d); }
-.tone-grape { color: var(--grape-d); }
-
-/* ── 专注三卡 ── */
-.sec-head { margin-bottom: 10px; }
-.focus-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-@media (max-width: 900px) { .focus-grid { grid-template-columns: 1fr; } }
-.fcard2 { padding: 16px 18px; }
-.f-top { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
-.f-ic {
-  width: 34px; height: 34px; display: grid; place-items: center; flex: none;
-  border-radius: 11px; background: var(--paper); border: 2px solid var(--line); box-shadow: var(--pop-sm);
-}
-.fcard2[data-tone='orange'] .f-ic { color: var(--orange-d); background: var(--orange-l); }
-.fcard2[data-tone='mint'] .f-ic { color: var(--mint-d); background: var(--mint-l); }
-.fcard2[data-tone='grape'] .f-ic { color: var(--grape-d); background: var(--grape-l); }
-.f-label { font-size: 13px; font-weight: 800; color: var(--ink2); }
-.f-num { font-size: 34px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.f-goal { font-size: 11.5px; color: var(--ink3); font-weight: 700; margin-top: 2px; }
-.f-bar { height: 10px; border-radius: 99px; background: var(--warm); border: 2px solid var(--hairline); margin: 8px 0 6px; overflow: hidden; }
-.f-bar i { display: block; height: 100%; border-radius: 99px; transition: width 0.6s var(--ease-out-quart); }
-.fcard2[data-tone='orange'] .f-bar i { background: var(--orange); }
-.fcard2[data-tone='mint'] .f-bar i { background: var(--mint); }
-.fcard2[data-tone='grape'] .f-bar i { background: var(--grape); }
-.f-prev { font-size: 12px; font-weight: 750; }
-.f-prev .up { color: var(--mint-d); }
-.f-prev .down { color: var(--berry); }
-
-/* mini 柱状 */
-.f-bars { display: flex; align-items: flex-end; gap: 6px; height: 56px; margin-top: 12px; }
-.f-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
-.f-bar-col i { display: block; width: 100%; max-width: 22px; min-height: 3px; border-radius: 5px 5px 2px 2px; background: var(--ham); border: 1.5px solid var(--line); }
-.f-bar-col i.hot { background: var(--orange); }
-.f-bar-col small { font-size: 9.5px; color: var(--ink3); font-weight: 700; }
-.fc-bar i { background: var(--sky); }
-
-/* ── 指标行 ── */
-.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
-@media (max-width: 900px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
-.mcard { padding: 13px 16px; }
-.m-label { font-size: 11.5px; font-weight: 800; color: var(--ink2); }
-.m-num { font-size: 24px; font-weight: 800; letter-spacing: -0.8px; margin-top: 2px; font-variant-numeric: tabular-nums; }
-.m-sub { margin-top: 1px; }
-
-/* ── 热力图 ── */
-.pad { padding: 16px 18px; }
-.hm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.hm-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink3); font-weight: 700; }
-.hm-grid { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 4px; }
-.hm-col { display: flex; flex-direction: column; gap: 5px; flex: none; }
-.hm-cell { width: 14px; height: 14px; border-radius: 4.5px; border: 1.5px solid var(--hairline); display: inline-block; }
-.hm-cell.heat0 { background: var(--heat0); }
-.hm-cell.heat1 { background: var(--heat1); }
-.hm-cell.heat2 { background: var(--heat2); }
-.hm-cell.heat3 { background: var(--heat3); border-color: var(--line); }
-.hm-cell.heat4 { background: var(--heat4); border-color: var(--line); }
-
-/* ── 遗忘曲线 ── */
-.fc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.fc-legend { display: flex; gap: 14px; font-size: 12px; font-weight: 700; color: var(--ink2); }
-.fc-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.lg-dot { width: 14px; height: 5px; border-radius: 3px; display: inline-block; }
-.fc-svg { width: 100%; height: auto; }
-.fc-tick { font-size: 11px; fill: var(--ink3); font-weight: 700; }
-.fc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-top: 2px dashed var(--hairline); padding-top: 12px; margin-top: 4px; }
-@media (max-width: 700px) { .fc-stats { grid-template-columns: repeat(2, 1fr); } }
-.fc-stat small { display: block; font-size: 11px; color: var(--ink3); font-weight: 700; }
-.fc-stat b { font-size: 17px; font-weight: 800; }
-
-/* ── 两栏 ── */
-.two-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
-@media (max-width: 900px) { .two-grid { grid-template-columns: 1fr; } }
-
-/* 卡组健康度 */
-.dh-row { margin-bottom: 12px; }
-.dh-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.dh-name { font-size: 13px; font-weight: 750; }
-.dh-pct { font-size: 12.5px; font-weight: 800; }
-.dh-bar { height: 9px; border-radius: 99px; background: var(--warm); border: 2px solid var(--hairline); overflow: hidden; }
-.dh-bar i { display: block; height: 100%; border-radius: 99px; transition: width 0.6s var(--ease-out-quart); }
-.dh-bar i.ok { background: var(--mint); }
-.dh-bar i.mid { background: var(--ham); }
-.dh-bar i.low { background: var(--orange); }
-.dh-pct.ok { color: var(--mint-d); }
-.dh-pct.mid { color: var(--ham-d); }
-.dh-pct.low { color: var(--orange-d); }
-
-/* ── 成就 ── */
-.ach-head { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 6px; }
-.ach-cabinet { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--ham-l); }
-.cab-num { font-size: 36px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
-.cab-num small { font-size: 15px; color: var(--ink3); font-weight: 750; letter-spacing: 0; }
-.cab-sub { font-size: 12.5px; color: var(--ink2); font-weight: 700; margin: 4px 0 8px; }
-.cab-bar { height: 10px; width: 260px; max-width: 100%; border-radius: 99px; background: var(--paper); border: 2px solid var(--hairline); overflow: hidden; }
-.cab-bar i { display: block; height: 100%; background: var(--orange); border-radius: 99px; transition: width 0.6s var(--ease-out-quart); }
-.cab-next {
-  background: var(--paper); border: 2.5px solid var(--line); border-radius: var(--r-md);
-  padding: 12px 16px; min-width: 220px; box-shadow: var(--pop-sm);
-}
-.cab-next small { font-size: 11px; color: var(--ink3); font-weight: 700; }
-.cab-next b { display: block; font-size: 16px; font-weight: 800; margin: 3px 0 7px; }
-.cab-next-bar { height: 8px; border-radius: 99px; background: var(--warm); border: 2px solid var(--hairline); overflow: hidden; margin-bottom: 5px; }
-.cab-next-bar i { display: block; height: 100%; background: var(--orange); border-radius: 99px; }
-
-.latest-card { display: flex; align-items: center; gap: 16px; margin-top: 14px; background: var(--ham-l); }
-.latest-body { flex: 1; min-width: 0; }
-.latest-name { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; }
-.latest-desc { font-size: 12.5px; color: var(--ink2); font-weight: 650; margin-top: 2px; }
-
-/* 六边形勋章（clip-path + drop-shadow 硬投影，沿用项目成就系统） */
-.hex {
-  width: 52px; height: 52px; flex: none;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  display: grid; place-items: center;
-  filter: drop-shadow(2.5px 2.5px 0 var(--line));
-}
-.hex .icon { width: 24px; height: 24px; }
-.hex.r-铜 { background: #ecd9c3; color: #8a5a2b; }
-.hex.r-银 { background: #e9edf1; color: #5f6b76; }
-.hex.r-金 { background: #f6e7ae; color: #8a6d0b; }
-.hex.r-钻 { background: #daf0fa; color: #2c6e8a; }
-.hex.r-locked { background: var(--warm); color: var(--ink3); }
-
-.latest-card .hex { width: 64px; height: 64px; }
-.latest-card .hex .icon { width: 30px; height: 30px; }
-
-.chip-r-copper { background: #ecd9c3; color: #8a5a2b; }
-.chip-r-silver { background: #e9edf1; color: #5f6b76; }
-.chip-r-gold { background: #f6e7ae; color: #8a6d0b; }
-.chip-r-diamond { background: #daf0fa; color: #2c6e8a; }
-
-/* 分组 */
-.ach-group { margin-top: 16px; }
-.ach-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.ach-group-name { font-size: 13px; font-weight: 800; color: var(--ink2); }
-.ach-group-name b { color: var(--orange-d); }
-.ach-group-progress {
-  width: 60px; height: 6px; border-radius: 99px; background: var(--warm);
-  position: relative; overflow: hidden;
-}
-.ach-group-progress::after {
-  content: ''; position: absolute; inset: 0; width: var(--p);
-  background: var(--mint); border-radius: 99px; transition: width 0.5s var(--ease-out-quart);
-}
-.ach-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-@media (max-width: 800px) { .ach-grid { grid-template-columns: repeat(2, 1fr); } }
-.ach-card {
-  position: relative; text-align: center; padding: 14px 10px 12px;
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-}
-.ach-card.locked { border-style: dashed; background: var(--cream); box-shadow: none; opacity: 0.75; }
-.ach-rarity {
-  position: absolute; top: 8px; right: 8px;
-  font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 99px; border: 1.5px solid var(--line);
-}
-.ach-name { font-size: 13.5px; font-weight: 800; }
-.ach-desc { font-size: 11px; color: var(--ink3); font-weight: 700; min-height: 14px; }
-.ach-bar { width: 82%; height: 7px; border-radius: 99px; background: var(--warm); border: 2px solid var(--hairline); overflow: hidden; }
-.ach-bar i { display: block; height: 100%; background: var(--ham); border-radius: 99px; transition: width 0.5s var(--ease-out-quart); }
-.ach-card:not(.locked) .ach-bar i { background: var(--mint); }
+.stats-page { max-width: 1160px; margin: 0 auto; padding-bottom: 36px; }
+.stats-head, .stats-section-head, .topic-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.stats-head { margin-bottom: 24px; }
+.stats-head .h-sub { margin-top: 4px; }
+.h-sec { font-size: 18px; font-weight: 850; }
+.stats-section-head { margin: 0 0 12px; }
+.stats-section-head span, .topic-head p, .muted { color: var(--ink3); font-size: 12px; }
+.stats-state { min-height: 160px; padding: 30px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--ink2); }
+.period-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.period-card { min-width: 0; display: flex; flex-direction: column; align-items: stretch; text-align: left; padding: 18px 20px; font: inherit; color: var(--ink); cursor: pointer; transition: transform .25s var(--ease-out-quart), border-color .25s ease, background .25s ease; }
+.period-card:hover { transform: translateY(-3px); }
+.period-card.selected { border-color: var(--orange-d); background: var(--orange-l); }
+.period-card:focus-visible, .period-switch button:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.period-label { display: flex; justify-content: space-between; color: var(--ink2); font-size: 13px; font-weight: 800; }
+.period-label span { color: var(--orange-d); }
+.period-card strong { margin-top: 8px; font-size: clamp(22px, 2.3vw, 31px); line-height: 1.2; white-space: nowrap; }
+.period-goal { margin-top: 5px; color: var(--ink3); font-size: 11px; }
+.period-progress { height: 8px; margin-top: 15px; border-radius: 99px; background: var(--warm); overflow: hidden; }
+.period-progress i { display: block; height: 100%; border-radius: inherit; background: var(--orange); transition: width .45s ease; }
+.topic-panel { margin-top: 16px; padding: 22px 24px 16px; }
+.topic-head p { margin-top: 4px; }
+.period-switch { display: inline-flex; gap: 3px; padding: 4px; border: 1.5px solid var(--hairline); border-radius: 12px; background: var(--cream); }
+.period-switch button { padding: 6px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink2); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.period-switch button.on { background: var(--orange); color: var(--onfill); }
+.topic-content { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 22px; }
+.topic-chart-wrap { position: relative; height: 270px; }
+.topic-chart { width: 100%; height: 100%; }
+.topic-chart-center { position: absolute; top: 50%; left: 50%; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap; }
+.topic-chart-center strong { font-size: 20px; font-weight: 850; }
+.topic-chart-center small { color: var(--ink3); font-size: 11px; }
+.topic-list { list-style: none; min-width: 0; }
+.topic-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--hairline); font-size: 12px; }
+.topic-list li:last-child { border-bottom: 0; }
+.topic-name { display: flex; align-items: center; min-width: 0; gap: 9px; font-weight: 750; }
+.topic-name i { width: 11px; height: 11px; flex: none; border-radius: 50%; }
+.topic-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-time { color: var(--ink2); white-space: nowrap; }
+.topic-list strong { text-align: right; font-variant-numeric: tabular-nums; }
+.topic-note { margin-top: 7px; color: var(--ink3); font-size: 11px; }
+.topic-empty { padding: 25px 12px; text-align: center; }
+.topic-empty strong { font-size: 16px; }
+.topic-empty p { margin: 6px 0 16px; color: var(--ink2); font-size: 12px; }
+.review-overview { margin-top: 26px; }
+.learning-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.learning-card { display: flex; flex-direction: column; padding: 16px 18px; }
+.learning-card span { color: var(--ink2); font-size: 12px; font-weight: 800; }
+.learning-card strong { margin-top: 4px; font-size: 27px; line-height: 1.2; }
+.learning-card small { color: var(--ink3); font-size: 11px; }
+.learning-card small button { border: 0; background: transparent; color: var(--orange-d); font: inherit; font-weight: 800; cursor: pointer; }
+.badge-section { margin-top: 28px; scroll-margin-top: 20px; }
+.badge-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
+.badge-filters button { border: 1.5px solid var(--hairline); border-radius: 99px; background: var(--paper); color: var(--ink2); padding: 7px 13px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.badge-filters button.active { border-color: var(--orange-d); background: var(--orange-l); color: var(--ink); }
+.badge-filters button:focus-visible, .badge-card:focus-visible, .badge-dialog-close:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.badge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.badge-card { display: flex; flex-direction: column; align-items: center; min-width: 0; padding: 13px 11px 11px; color: var(--ink); font: inherit; text-align: center; cursor: pointer; transition: transform .25s var(--ease-out-quart), border-color .25s ease, box-shadow .25s ease; }
+.badge-section.is-visible .badge-card { animation: badgeDealIn .52s var(--ease-out-quart) both; animation-delay: calc(var(--badge-order, 0) * 42ms); }
+@keyframes badgeDealIn { from { opacity: 0; transform: translateY(22px) scale(.88) rotate(-3deg); } to { opacity: 1; transform: translateY(0) scale(1) rotate(0); } }
+.badge-card:hover { transform: translateY(-4px); border-color: var(--orange-d); }
+.badge-card.earned { position: relative; overflow: hidden; background: linear-gradient(155deg, var(--orange-l), var(--paper) 65%); }
+.badge-card.earned::after { content: ''; position: absolute; top: -60%; left: -95%; width: 46%; height: 220%; transform: rotate(22deg); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 68%), transparent); transition: left .65s ease; pointer-events: none; }
+.badge-card.earned:hover::after { left: 145%; }
+.badge-card.earned:hover { box-shadow: 0 10px 25px rgb(98 55 25 / 13%); }
+.badge-card:not(.earned) { color: var(--ink3); background: var(--cream); }
+.badge-art { display: grid; place-items: center; width: min(100%, 148px); aspect-ratio: 1; border-radius: 18px; background: radial-gradient(circle at 50% 38%, #fffaf0 0, #f1e9e0 64%, #ece8ed 100%); }
+.badge-art img { display: block; width: 100%; height: 100%; object-fit: contain; transition: transform .35s var(--ease-out-quart); }
+.badge-card.earned:hover .badge-art img { transform: translateY(-5px) rotate(-4deg) scale(1.07); }
+.badge-card:not(.earned) .badge-art { background: #efeeed; }
+.badge-card:not(.earned) .badge-art img, .badge-dialog > img.locked { filter: grayscale(1); opacity: .62; }
+.badge-card strong { max-width: 100%; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.badge-card-bottom { display: flex; justify-content: space-between; align-self: stretch; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hairline); color: var(--ink3); }
+.badge-card-bottom small { font-size: 10px; white-space: nowrap; }
+.badge-card.earned .badge-card-bottom small:last-child { color: var(--orange-d); font-weight: 800; }
+.badge-dialog-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 18px; background: rgb(24 20 30 / 55%); backdrop-filter: blur(5px); }
+.badge-detail-enter-active, .badge-detail-leave-active { transition: opacity .22s ease; }
+.badge-detail-enter-from, .badge-detail-leave-to { opacity: 0; }
+.badge-detail-enter-active .badge-dialog, .badge-detail-leave-active .badge-dialog { transition: transform .34s var(--ease-out-quart), opacity .25s ease; }
+.badge-detail-enter-from .badge-dialog { opacity: 0; transform: translateY(24px) scale(.86) rotate(-3deg); }
+.badge-detail-leave-to .badge-dialog { opacity: 0; transform: translateY(12px) scale(.95); }
+.badge-dialog { position: relative; display: flex; flex-direction: column; align-items: center; width: min(100%, 370px); padding: 28px 26px 30px; text-align: center; background: var(--paper); box-shadow: 8px 10px 0 rgb(28 20 22 / 18%); }
+.badge-dialog-close { position: absolute; right: 12px; top: 9px; border: 0; background: transparent; color: var(--ink2); font-size: 28px; cursor: pointer; }
+.badge-dialog > img { width: 200px; height: 200px; object-fit: contain; border-radius: 20px; background: radial-gradient(circle at 50% 38%, #fffaf0, #f1e9e0 72%); }
+.badge-dialog-group { margin-top: 13px; color: var(--orange-d); font-size: 12px; font-weight: 800; }
+.badge-dialog h2 { margin: 4px 0 0; font-size: 22px; }
+.badge-dialog p { margin: 8px 0 18px; color: var(--ink2); font-size: 13px; }
+.badge-dialog > strong { font-size: 13px; }
+.badge-dialog > strong.unlocked { color: var(--orange-d); }
+.badge-dialog-progress { width: 100%; height: 8px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: var(--warm); }
+.badge-dialog-progress i { display: block; height: 100%; border-radius: inherit; background: var(--orange); }
+@media (prefers-reduced-motion: reduce) { .badge-section.is-visible .badge-card { animation: none; } .badge-card.earned::after, .badge-art img, .badge-detail-enter-active, .badge-detail-leave-active, .badge-detail-enter-active .badge-dialog, .badge-detail-leave-active .badge-dialog { transition: none; } }
+.more-stats { margin-top: 16px; padding: 0; }
+.more-stats summary { padding: 16px 20px; cursor: pointer; font-size: 14px; font-weight: 850; }
+.more-stats summary span { margin-left: 10px; color: var(--ink3); font-size: 11px; font-weight: 500; }
+.more-body { padding: 0 20px 20px; }
+.more-section { border-top: 1px solid var(--hairline); padding-top: 14px; margin-top: 14px; }
+.more-section h3 { margin-bottom: 9px; font-size: 13px; }
+.more-section h3 small { color: var(--ink3); font-size: 11px; }
+.heatmap { display: flex; gap: 4px; overflow-x: auto; padding: 2px 0 8px; }
+.heat-week { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.heat-cell { width: 13px; height: 13px; border: 1px solid var(--hairline); border-radius: 4px; }
+.heat-0 { background: var(--heat0); } .heat-1 { background: var(--heat1); } .heat-2 { background: var(--heat2); } .heat-3 { background: var(--heat3); } .heat-4 { background: var(--heat4); }
+.deck-health { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 38px; gap: 10px; align-items: center; padding: 5px 0; font-size: 12px; }
+.deck-health > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-track { height: 8px; border-radius: 99px; background: var(--warm); overflow: hidden; }
+.health-track i { display: block; height: 100%; background: var(--mint); }
+.deck-health b { text-align: right; }
+.stats-footnote { margin-top: 14px; color: var(--ink3); font-size: 11px; }
+@media (max-width: 900px) { .learning-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .badge-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .period-grid { gap: 8px; } .period-card { padding: 12px; } .period-card strong { font-size: 20px; white-space: normal; } .topic-content { grid-template-columns: 1fr; gap: 0; } .topic-chart-wrap { height: 230px; } .topic-panel { padding: 18px; } .badge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
+@media (max-width: 480px) { .stats-head .btn { padding: 7px 10px; font-size: 11px; } .stats-section-head span { display: none; } .period-card strong { font-size: 16px; } .period-label { font-size: 11px; } .period-goal { font-size: 10px; } .topic-head { align-items: flex-start; flex-wrap: wrap; } .period-switch { width: 100%; justify-content: space-around; } .learning-grid { gap: 8px; } .learning-card { padding: 12px; } .learning-card strong { font-size: 22px; } .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .badge-card { padding: 10px 8px; } .more-stats summary span { display: block; margin: 2px 0 0; } }
+@media (prefers-reduced-motion: reduce) { .period-card, .period-progress i { transition: none; } }
 </style>

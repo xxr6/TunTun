@@ -7,11 +7,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.core.exceptions import not_found
+from app.core.exceptions import AppError, not_found
 from app.models.card import Card, CardState
 from app.models.deck import Deck
 from app.models.user import User
 from app.schemas.card import CardBulkAction, CardCreate, CardListOut, CardOut, CardUpdate
+from app.services.card_quality import card_quality_error
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -116,6 +117,9 @@ async def update_card(
 ):
     card = await _get_card(db, user.id, card_id)
     data = body.model_dump(exclude_unset=True)
+    error = card_quality_error(data.get("card_type", card.card_type), data.get("front", card.front), data.get("back", card.back))
+    if error:
+        raise AppError(422, "CARD_NEEDS_ANSWER", error)
     for k, v in data.items():
         setattr(card, k, v)
     await db.commit()

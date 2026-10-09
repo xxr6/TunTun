@@ -6,11 +6,7 @@
 
     <aside class="sidebar">
       <div class="logo" @click="router.push('/today')" aria-label="回到今日">
-        <svg viewBox="0 0 24 24" fill="none" style="stroke:var(--ink)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2.5" y="7" width="14" height="14" rx="3.5" style="fill:var(--paper)" />
-          <path d="M6.5 3h11a3 3 0 0 1 3 3v10" />
-          <path d="M6.5 11h6M6.5 15.5h8" />
-        </svg>
+        <img :src="logoUrl" alt="囤囤 TUNTUN" />
       </div>
       <div class="brand" @click="router.push('/today')" title="回到今日">TUNTUN</div>
 
@@ -25,7 +21,7 @@
 
       <!-- 专注进行中：侧栏迷你进度（跨页存活），点击回到专注页 -->
       <button v-if="focusStore.hasActiveSession" class="nav-mini" :class="{ paused: focusStore.paused }"
-              :aria-label="focusStore.paused ? `专注已暂停 ${focusClock}` : `专注进行中，剩余 ${focusClock}`"
+              :aria-label="focusStore.mode === 'countup' ? `${focusStore.paused ? '正向计时已暂停' : '正向计时中'}，已专注 ${focusClock}` : focusStore.paused ? `专注已暂停 ${focusClock}` : `专注进行中，剩余 ${focusClock}`"
               @click="router.push('/focus')">
         <svg class="icon"><use href="#i-timer" /></svg>
         <span>{{ focusClock }}</span>
@@ -60,29 +56,47 @@
         </Transition>
       </div>
 
-      <button class="nav-item" @click="router.push('/decks')" aria-label="卡组">
-        <svg class="icon"><use href="#i-library" /></svg>
-        <span class="tip">卡组</span>
-      </button>
       <div class="avatar" @click="router.push('/me')" :title="userStore.user?.username">{{ avatarText }}</div>
     </aside>
 
     <main class="main theming-fade">
       <router-view v-slot="{ Component }">
         <Transition name="view">
-          <component :is="Component" :key="route.path" />
+          <KeepAlive include="Extract">
+            <component :is="Component" :key="route.path" />
+          </KeepAlive>
         </Transition>
       </router-view>
     </main>
+
+    <Transition name="badge-reveal" mode="out-in">
+      <div v-if="activeBadge" :key="activeBadge.name" class="badge-reveal-mask" @click.self="dismissBadge">
+        <div class="badge-reveal-card" role="dialog" aria-modal="true" :aria-label="`恭喜获得${activeBadge.name}徽章`">
+          <button class="badge-reveal-close" type="button" aria-label="收起徽章" @click="dismissBadge">×</button>
+          <span class="badge-reveal-spark spark-a" aria-hidden="true">✦</span>
+          <span class="badge-reveal-spark spark-b" aria-hidden="true">✧</span>
+          <span class="badge-reveal-spark spark-c" aria-hidden="true">✦</span>
+          <div class="badge-reveal-art"><img :src="badgeArt[activeBadge.name]" :alt="`${activeBadge.name}徽章`" /></div>
+          <span class="badge-reveal-kicker">新徽章解锁 · {{ activeBadge.rarity }}</span>
+          <h2>恭喜获得「{{ activeBadge.name }}」！</h2>
+          <p>{{ activeBadge.desc }}</p>
+          <button class="badge-reveal-primary" type="button" @click="dismissBadge">{{ badgeQueue.length > 1 ? '继续领取' : '收下徽章' }}</button>
+          <button v-if="badgeQueue.length === 1" class="badge-reveal-link" type="button" @click="goToMyBadges">查看我的徽章 →</button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { useFocusStore } from '@/stores/focus'
+import { useFocusStore, formatFocusClock } from '@/stores/focus'
 import { useTheme, THEME_META } from '@/composables/useTheme'
+import { statsApi } from '@/api/stats'
+import { badgeArt, type Badge } from '@/lib/badges'
+import logoUrl from '@/assets/logo.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,12 +106,45 @@ const { name: themeName, index: themeIndex, setThemeByIndex, cycle } = useTheme(
 
 /** 侧栏迷你进度的时钟（mm:ss，随 store 250ms 一次 tick 更新） */
 const focusClock = computed(() => {
-  const m = String(Math.floor(focusStore.remaining / 60)).padStart(2, '0')
-  const s = String(focusStore.remaining % 60).padStart(2, '0')
-  return `${m}:${s}`
+  return formatFocusClock(focusStore.remaining)
 })
 
 const themeOpen = ref(false)
+const badgeQueue = ref<Badge[]>([])
+const activeBadge = computed(() => badgeQueue.value[0] ?? null)
+let badgeTimer: number | null = null
+let badgeCheckBusy = false
+let badgeCheckAgain = false
+
+function dismissBadge() {
+  badgeQueue.value.shift()
+}
+function goToMyBadges() {
+  dismissBadge()
+  router.push('/me#my-badges')
+}
+async function claimBadges() {
+  if (!userStore.user) return
+  if (badgeCheckBusy) { badgeCheckAgain = true; return }
+  badgeCheckBusy = true
+  try {
+    const fresh = (await statsApi.claimNewBadges()).data
+    const queued = new Set(badgeQueue.value.map((badge) => badge.name))
+    for (const badge of fresh) {
+      if (!queued.has(badge.name)) badgeQueue.value.push(badge)
+    }
+  } catch {
+    // The next navigation or progress change retries the notification check.
+  } finally {
+    badgeCheckBusy = false
+    if (badgeCheckAgain) { badgeCheckAgain = false; scheduleBadgeCheck() }
+  }
+}
+function scheduleBadgeCheck() {
+  if (badgeTimer !== null) window.clearTimeout(badgeTimer)
+  badgeTimer = window.setTimeout(() => { badgeTimer = null; void claimBadges() }, 220)
+}
+watch(() => route.fullPath, scheduleBadgeCheck)
 
 function onThemeSelect(i: number) {
   setThemeByIndex(i)
@@ -111,6 +158,7 @@ function onDocClick(e: MouseEvent) {
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') themeOpen.value = false
+  if (e.key === 'Escape' && activeBadge.value) dismissBadge()
 }
 // Shift + T 循环切换（保留原来的快速切主题手感）
 function onHotkey(e: KeyboardEvent) {
@@ -121,11 +169,15 @@ function onHotkey(e: KeyboardEvent) {
   }
 }
 onMounted(() => {
+  scheduleBadgeCheck()
+  window.addEventListener('zhistack:achievement-progress', scheduleBadgeCheck)
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onKey)
   document.addEventListener('keydown', onHotkey)
 })
 onUnmounted(() => {
+  if (badgeTimer !== null) window.clearTimeout(badgeTimer)
+  window.removeEventListener('zhistack:achievement-progress', scheduleBadgeCheck)
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('keydown', onHotkey)
@@ -134,6 +186,7 @@ onUnmounted(() => {
 const navItems = [
   { path: '/today', label: '今日', icon: '#i-home' },
   { path: '/review', label: '复习', icon: '#i-cards' },
+  { path: '/decks', label: '卡组', icon: '#i-library' },
   { path: '/library', label: '内容库', icon: '#i-folder' },
   { path: '/reader', label: '阅读器', icon: '#i-book' },
   { path: '/extract', label: 'AI 提炼', icon: '#i-scissor' },
@@ -185,7 +238,7 @@ const avatarText = computed(() => (userStore.user?.username || '囤').slice(0, 1
   cursor: pointer;
 }
 .logo:hover { transform: rotate(-8deg) scale(1.08); }
-.logo svg { width: 30px; height: 30px; }
+.logo img { width: 100%; height: 100%; object-fit: cover; }
 
 .brand {
   font-size: 11px;
@@ -356,15 +409,82 @@ const avatarText = computed(() => (userStore.user?.username || '囤').slice(0, 1
 }
 .avatar:hover { transform: scale(1.1) rotate(7deg); }
 
+.badge-reveal-mask { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px; background: rgb(21 20 34 / 67%); backdrop-filter: blur(8px); }
+.badge-reveal-card { position: relative; width: min(100%, 420px); padding: 26px 28px 28px; overflow: hidden; border: 3px solid var(--line); border-radius: 28px; background: radial-gradient(circle at 50% 34%, #fff9e5, var(--paper) 70%); box-shadow: 9px 11px 0 rgb(15 13 25 / 28%); text-align: center; }
+.badge-reveal-card::before { content: ''; position: absolute; width: 300px; height: 300px; left: calc(50% - 150px); top: -52px; border-radius: 50%; background: repeating-conic-gradient(from 8deg, rgb(245 167 79 / 11%) 0 9deg, transparent 9deg 18deg); pointer-events: none; }
+.badge-reveal-close { position: absolute; top: 10px; right: 15px; z-index: 2; border: 0; background: transparent; color: var(--ink2); font-size: 27px; cursor: pointer; }
+.badge-reveal-art { position: relative; width: 210px; height: 210px; margin: 8px auto 0; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle, #ffe9b2, transparent 69%); animation: badgeArtIn .65s var(--ease-out-quart) both; }
+.badge-reveal-art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 11px rgb(48 25 29 / 22%)); }
+.badge-reveal-kicker { position: relative; display: block; margin-top: 7px; color: var(--orange-d); font-size: 12px; font-weight: 850; letter-spacing: .08em; }
+.badge-reveal-card h2 { position: relative; margin: 7px 0 0; color: var(--ink); font-size: clamp(20px, 5vw, 25px); }
+.badge-reveal-card p { position: relative; margin: 8px 0 20px; color: var(--ink2); font-size: 13px; }
+.badge-reveal-primary { position: relative; width: 100%; padding: 12px 16px; border: 2px solid var(--line); border-radius: 14px; background: var(--orange); color: var(--onfill); box-shadow: var(--pop-sm); font: inherit; font-weight: 850; cursor: pointer; }
+.badge-reveal-link { position: relative; margin-top: 14px; padding: 4px; border: 0; background: transparent; color: var(--ink2); font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.badge-reveal-spark { position: absolute; z-index: 1; color: #e8a34c; font-size: 24px; animation: badgeSpark 2s ease-in-out infinite; pointer-events: none; }
+.badge-reveal-spark.spark-a { left: 13%; top: 19%; }
+.badge-reveal-spark.spark-b { right: 14%; top: 27%; animation-delay: .4s; }
+.badge-reveal-spark.spark-c { right: 26%; top: 10%; animation-delay: .8s; }
+.badge-reveal-enter-active { animation: badgeMaskIn .3s ease both; }
+.badge-reveal-enter-active .badge-reveal-card { animation: badgeCardIn .5s var(--ease-out-quart) both; }
+.badge-reveal-leave-active { animation: badgeMaskIn .2s ease reverse both; }
+@keyframes badgeMaskIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes badgeCardIn { from { opacity: 0; transform: translateY(24px) scale(.82) rotate(-5deg); } to { opacity: 1; transform: translateY(0) scale(1) rotate(0); } }
+@keyframes badgeArtIn { from { transform: scale(.5) rotate(-24deg); } to { transform: scale(1) rotate(0); } }
+@keyframes badgeSpark { 50% { opacity: .35; transform: scale(.7) rotate(25deg); } }
+@media (prefers-reduced-motion: reduce) { .badge-reveal-mask, .badge-reveal-card, .badge-reveal-art, .badge-reveal-spark { animation: none !important; } }
+
 .main {
   flex: 1;
   margin-left: 92px;
   padding: 28px 40px 28px;
   max-width: 1200px;
   position: relative;
-  transition: opacity 0.3s var(--ease), filter 0.3s var(--ease);
+  transition: opacity 0.3s var(--ease), filter 0.3s var(--ease), margin-left 0.3s var(--ease);
 }
 @media (max-width: 760px) {
   .main { padding: 20px 18px 80px; }
+}
+
+/* ── 屏幕自适应：中屏收窄成图标栏，窄屏转底部横栏 ── */
+@media (max-width: 900px) {
+  .sidebar { width: 64px; padding: 14px 0 12px; gap: 5px; }
+  .logo { width: 42px; height: 42px; border-radius: 14px; }
+  .brand { display: none; }
+  .nav-item { width: 44px; height: 44px; border-radius: 13px; }
+  .nav-item .icon { width: 19px; height: 19px; }
+  .nav-item .tip { left: 52px; }
+  .nav-mini { width: 44px; font-size: 9.5px; }
+  .avatar { width: 36px; height: 36px; border-radius: 12px; font-size: 14px; }
+  .tp-iconbox { width: 38px; height: 38px; border-radius: 11px; }
+  .theme-pop { left: 54px; width: 236px; }
+  .main { margin-left: 64px; padding: 20px 22px 26px; }
+}
+
+@media (max-width: 600px) {
+  .app { display: block; }
+  .sidebar {
+    top: auto; right: 0; bottom: 0; left: 0; width: auto; height: 62px;
+    flex-direction: row; justify-content: space-between; align-items: center;
+    padding: 0 12px; gap: 2px;
+    border-right: none; border-top: 2.5px solid var(--line);
+    background: var(--paper);
+  }
+  .logo { width: 34px; height: 34px; border-radius: 11px; margin-bottom: 0; }
+  .nav-item { width: 40px; height: 40px; border-radius: 12px; }
+  .nav-item .tip { left: 50%; top: auto; bottom: calc(100% + 8px); transform: translateX(-50%) translateY(4px); }
+  .nav-item:hover .tip { transform: translateX(-50%) translateY(0); }
+  .nav-spacer { display: none; }
+  .nav-mini { width: 44px; padding: 4px 0; font-size: 9px; border-radius: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; }
+  .theme-slot { position: static; }
+  /* 底部栏模式：主题浮层向上弹出、水平居中 */
+  .theme-pop {
+    left: 50%; top: auto; bottom: 70px; width: 244px;
+    transform: translateX(-50%);
+    animation: none;
+    border-radius: 20px;
+  }
+  .gooey-enter-active, .gooey-leave-active { animation: none; transition: opacity 0.18s var(--ease); }
+  .main { margin-left: 0; padding: 16px 14px 84px; }
 }
 </style>

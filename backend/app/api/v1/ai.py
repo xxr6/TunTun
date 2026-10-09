@@ -5,6 +5,7 @@ from app.core.deps import get_current_user, get_db
 from app.models.ai_usage import AiUsage
 from app.models.user import User
 from app.schemas.ai import CardSelectionIn, CardSelectionOut, GeneratedCard
+from app.services.card_quality import generated_candidate_ready
 from app.services.llm.provider import LLMError, LLMNotConfigured, get_llm
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -15,8 +16,9 @@ _SYSTEM = (
     "1. 类型：basic（问答，正面问题背面答案）或 cloze（挖空，把关键词用 {{c1::答案}} 挖空）。"
     "概念/定义用 basic，关键句用 cloze。\n"
     "2. 忠于原文，不要编造原文没有的内容。\n"
-    "3. 一般 1~3 张，只有确实包含多个独立知识点时才多张。\n"
-    "4. 只返回 JSON，格式：{\"cards\":[{\"card_type\":\"basic\",\"front\":\"...\",\"back\":\"...\"}]}"
+    "3. 一般 1~3 张，只有确实包含多个独立知识点时才多张；每张只问一个问题，正面不超过 180 字。\n"
+    "4. 不要把整段文字、列表或表格直接放在正面。basic 正面必须是具体问题，背面必须有答案。\n"
+    "5. 只返回 JSON，格式：{\"cards\":[{\"card_type\":\"basic\",\"front\":\"...\",\"back\":\"...\"}]}"
 )
 
 
@@ -50,7 +52,7 @@ async def cards_from_selection(
                 confidence=float(c.get("confidence", 0.8)),
             )
             for c in data.get("cards", [])
-            if c.get("front")
+            if generated_candidate_ready(str(c.get("card_type", "basic")), str(c.get("front", "")), str(c.get("back", "")))
         ]
         if not cards:
             raise LLMError("LLM 未返回卡片")

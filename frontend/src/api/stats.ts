@@ -11,4 +11,7 @@ export const statsApi = {
   dashboard() {
     return client.get<StatsDashboard>('/stats/dashboard')
   },
+  claimNewBadges() {
+    return client.post<StatsDashboard['achievements']>('/stats/achievements/claim')
+  },
 }

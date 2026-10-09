@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { authApi } from '@/api/auth'
 import { tokenStore } from '@/api/client'
+import { useExtractStore } from '@/stores/extract'
+import { useFocusStore } from '@/stores/focus'
 import type { User } from '@/types/api'
 
 export const useUserStore = defineStore('user', {
@@ -16,11 +18,13 @@ export const useUserStore = defineStore('user', {
       const res = await authApi.login({ account, password })
       tokenStore.set(res.data.access_token, res.data.refresh_token)
       await this.fetchMe()
+      if (this.user) useFocusStore().restore(this.user.id)
     },
     async register(email: string, username: string, password: string) {
       const res = await authApi.register({ email, username, password })
       tokenStore.set(res.data.access_token, res.data.refresh_token)
       await this.fetchMe()
+      if (this.user) useFocusStore().restore(this.user.id)
     },
     async fetchMe() {
       const res = await authApi.me()
@@ -52,6 +56,8 @@ export const useUserStore = defineStore('user', {
       }
       tokenStore.clear()
       this.user = null
+      useExtractStore().resetSession()
+      useFocusStore().forgetLocal()
     },
   },
 })

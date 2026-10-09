@@ -2,6 +2,9 @@ import { client } from './client'
 import type { Card, CardList } from '@/types/api'
 
 export const cardsApi = {
+  get(id: string) {
+    return client.get<Card>(`/cards/${id}`)
+  },
   list(params: { deck_id?: string; source_file_id?: string; tag?: string; state?: string; q?: string; limit?: number; offset?: number } = {}) {
     return client.get<CardList>('/cards', { params })
   },

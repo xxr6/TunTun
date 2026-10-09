@@ -22,8 +22,14 @@ def _backfill_focus_columns(sync_conn: Connection) -> None:
     create_all 不会给已建好的表加新列；SQLite 开发库在这里手动补列，
     PostgreSQL 需要正式迁移（Alembic），此处跳过并打日志说明。
     """
+    if sync_conn.dialect.name == "postgresql":
+        sync_conn.exec_driver_sql(
+            "ALTER TABLE focus_sessions ADD COLUMN IF NOT EXISTS interrupted BOOLEAN NOT NULL DEFAULT FALSE"
+        )
+        logger.info("focus_sessions 已检查 interrupted 列")
+        return
     if sync_conn.dialect.name != "sqlite":
-        logger.info("focus_sessions 的 deck_id/deck_name 列需要正式迁移（Alembic），跳过自动补列")
+        logger.info("focus_sessions 自动补列暂不支持此数据库")
         return
     cols = {row[1] for row in sync_conn.exec_driver_sql("PRAGMA table_info(focus_sessions)")}
     if "deck_id" not in cols:
@@ -34,6 +40,11 @@ def _backfill_focus_columns(sync_conn: Connection) -> None:
             "ALTER TABLE focus_sessions ADD COLUMN deck_name VARCHAR(120) NOT NULL DEFAULT ''"
         )
         logger.info("focus_sessions 已补列 deck_name VARCHAR(120) NOT NULL DEFAULT ''")
+    if "interrupted" not in cols:
+        sync_conn.exec_driver_sql(
+            "ALTER TABLE focus_sessions ADD COLUMN interrupted BOOLEAN NOT NULL DEFAULT 0"
+        )
+        logger.info("focus_sessions 已补列 interrupted BOOLEAN NOT NULL DEFAULT 0")
 
 
 async def init_db() -> None:

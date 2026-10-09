@@ -6,6 +6,7 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import { useUserStore } from './stores/user'
+import { useFocusStore } from './stores/focus'
 
 import 'uno.css'
 import './styles/index.css'
@@ -21,6 +22,7 @@ async function start() {
   // 刷新页面时被踢回登录页。
   const userStore = useUserStore()
   await userStore.bootstrap()
+  if (userStore.user) useFocusStore().restore(userStore.user.id)
 
   app.use(router)
   app.mount('#app')

@@ -3,11 +3,13 @@ import type { FocusSession, FocusSummary } from '@/types/api'
 
 export const focusApi = {
   createSession(payload: {
+    id?: string
     mode: string
     started_at: string
     ended_at: string
     duration_seconds: number
     completed: boolean
+    interrupted?: boolean
     deck_id?: string | null
     deck_name?: string
   }) {

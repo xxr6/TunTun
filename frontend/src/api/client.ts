@@ -44,7 +44,16 @@ async function doRefresh(): Promise<string> {
 }
 
 client.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const method = res.config.method?.toLowerCase()
+    const path = res.config.url?.split('?')[0] ?? ''
+    const changesAchievementProgress = method === 'post' && (
+      ['/focus/sessions', '/review/answer', '/checkin', '/cards', '/files', '/extract/from-file', '/ai/cards/from-selection'].includes(path)
+      || /^\/extract\/notes\/[^/]+\/split-candidates$/.test(path)
+    )
+    if (changesAchievementProgress) window.dispatchEvent(new Event('zhistack:achievement-progress'))
+    return res
+  },
   async (error: AxiosError) => {
     const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean }
     if (error.response?.status === 401 && original && !original._retried && tokenStore.refresh) {

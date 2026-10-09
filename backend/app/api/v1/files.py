@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
-from app.core.exceptions import AppError, not_found
+from app.core.exceptions import AppError, conflict, not_found
 from app.models.file import Document, File
 from app.models.user import User
 from app.schemas.file import FileOut, FileUpdate, FolderCreate
@@ -29,9 +29,17 @@ async def _get_file(db: AsyncSession, user_id: uuid.UUID, file_id: uuid.UUID) ->
     return f
 
 
+async def _get_folder(db: AsyncSession, user_id: uuid.UUID, folder_id: uuid.UUID) -> File:
+    folder = await _get_file(db, user_id, folder_id)
+    if not folder.is_dir:
+        raise AppError(400, "NOT_A_FOLDER", "目标不是文件夹")
+    return folder
+
+
 @router.get("", response_model=list[FileOut])
 async def list_files(
     parent_id: uuid.UUID | None = None,
+    all_files: bool = Query(default=False, alias="all"),
     q: str | None = Query(default=None, max_length=100, description="按文件名或解析正文模糊搜索（搜正文时跨目录）"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -46,6 +54,8 @@ async def list_files(
             .exists()
         )
         conds.append(or_(File.name.ilike(like), text_hit))
+    elif all_files:
+        pass
     elif parent_id is not None:
         conds.append(File.parent_id == parent_id)
     else:
@@ -72,6 +82,18 @@ async def list_files(
     return out
 
 
+@router.get("/folders", response_model=list[FileOut])
+async def list_folders(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    folders = (
+        await db.scalars(
+            select(File).where(
+                File.user_id == user.id, File.is_dir.is_(True), File.deleted_at.is_(None)
+            ).order_by(File.name)
+        )
+    ).all()
+    return [FileOut.model_validate(folder) for folder in folders]
+
+
 @router.post("", response_model=FileOut, status_code=201)
 async def upload_file(
     file: UploadFile,
@@ -79,6 +101,8 @@ async def upload_file(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if parent_id is not None:
+        await _get_folder(db, user.id, parent_id)
     data = await file.read()
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
     if len(data) > max_bytes:
@@ -94,6 +118,7 @@ async def upload_file(
         select(File).where(
             File.user_id == user.id,
             File.content_hash == content_hash,
+            File.parent_id == parent_id,
             File.deleted_at.is_(None),
         )
     )
@@ -150,7 +175,21 @@ async def upload_file(
 async def create_folder(
     body: FolderCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    f = File(user_id=user.id, parent_id=body.parent_id, name=body.name, is_dir=True)
+    name = body.name.strip()
+    if not name:
+        raise AppError(422, "EMPTY_FOLDER_NAME", "请输入文件夹名称")
+    if body.parent_id is not None:
+        await _get_folder(db, user.id, body.parent_id)
+    duplicate = await db.scalar(select(File.id).where(
+        File.user_id == user.id,
+        File.parent_id == body.parent_id,
+        File.name == name,
+        File.is_dir.is_(True),
+        File.deleted_at.is_(None),
+    ))
+    if duplicate:
+        raise conflict("当前目录已有同名文件夹")
+    f = File(user_id=user.id, parent_id=body.parent_id, name=name, is_dir=True)
     db.add(f)
     await db.commit()
     await db.refresh(f)
@@ -177,6 +216,22 @@ async def update_file(
 ):
     f = await _get_file(db, user.id, file_id)
     data = body.model_dump(exclude_unset=True)
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        if not name:
+            raise AppError(422, "EMPTY_FILE_NAME", "名称不能为空")
+        data["name"] = name
+    if "parent_id" in data and data["parent_id"] is not None:
+        parent = await _get_folder(db, user.id, data["parent_id"])
+        if f.is_dir:
+            ancestor = parent
+            while ancestor is not None:
+                if ancestor.id == f.id:
+                    raise conflict("不能把文件夹移动到自己或子文件夹下")
+                ancestor = (
+                    await _get_folder(db, user.id, ancestor.parent_id)
+                    if ancestor.parent_id is not None else None
+                )
     for k, v in data.items():
         setattr(f, k, v)
     await db.commit()

@@ -26,6 +26,19 @@ dist-ssr/
 # 前端真机测试临时产物
 frontend/tests/.tmp-visual/
 frontend/tests/.tmp-upload/
+frontend/tests/shots/
+
+# 根目录设计预览图与本机部署记录
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/DEPLOYMENT.md
+/ui-review/
+
+# 测试运行产生的临时目录
+backend/tmp*/
+backend/pytest-cache-files-*/
 
 # 会话临时产物与调试残留
 .dsh-vision-toolkit/

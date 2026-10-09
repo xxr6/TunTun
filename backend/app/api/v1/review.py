@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_user, get_db
-from app.core.exceptions import not_found
+from app.core.exceptions import AppError, not_found
 from app.models.card import Card, CardState, ReviewLog
 from app.models.deck import Deck
 from app.models.user import User
@@ -20,6 +20,7 @@ from app.schemas.review import (
     ReviewUndoOut,
 )
 from app.services.srs.scheduler import ReviewScheduler
+from app.services.card_quality import card_quality_error, reviewable
 
 router = APIRouter(prefix="/review", tags=["review"])
 
@@ -27,6 +28,16 @@ scheduler = ReviewScheduler()
 
 # 参与调度的活跃状态
 _ACTIVE_STATES = ("new", "learning", "review", "relearning")
+
+
+def _study_ready_sql():
+    return (
+        (func.length(func.trim(Card.front)) > 0)
+        & (
+        ((Card.card_type == "cloze") & Card.front.like("%{{c%::%}}%"))
+        | ((Card.card_type != "cloze") & (func.length(func.trim(Card.back)) > 0))
+        )
+    )
 
 
 async def _active_card(db: AsyncSession, user_id: uuid.UUID, card_id: uuid.UUID) -> Card:
@@ -42,15 +53,23 @@ async def _active_card(db: AsyncSession, user_id: uuid.UUID, card_id: uuid.UUID)
 
 async def _remaining_today(db: AsyncSession, user_id: uuid.UUID) -> int:
     now = datetime.now(timezone.utc)
-    n = await db.scalar(
-        select(func.count(Card.id)).where(
+    rows = (await db.execute(
+        select(Card.card_type, Card.front, Card.back).where(
             Card.user_id == user_id,
             Card.deleted_at.is_(None),
             Card.state.in_(_ACTIVE_STATES),
             Card.due <= now,
         )
-    )
-    return n or 0
+    )).all()
+    return sum(reviewable(card_type, front, back) for card_type, front, back in rows)
+
+
+async def _needs_repair(db: AsyncSession, user_id: uuid.UUID, deck_id: uuid.UUID | None) -> int:
+    conds = [Card.user_id == user_id, Card.deleted_at.is_(None), Card.state.in_(_ACTIVE_STATES)]
+    if deck_id is not None:
+        conds.append(Card.deck_id == deck_id)
+    rows = (await db.execute(select(Card.card_type, Card.front, Card.back).where(*conds))).all()
+    return sum(not reviewable(card_type, front, back) for card_type, front, back in rows)
 
 
 @router.get("/queue", response_model=ReviewQueueOut)
@@ -66,6 +85,7 @@ async def queue(
         Card.deleted_at.is_(None),
         Card.state.in_(_ACTIVE_STATES),
         Card.due <= now,
+        _study_ready_sql(),
     ]
     if deck_id is not None:
         conds.append(Card.deck_id == deck_id)
@@ -76,9 +96,9 @@ async def queue(
             .options(selectinload(Card.state_info))
             .where(*conds)
             .order_by(Card.due.asc())
-            .limit(limit)
         )
     ).all()
+    cards = [c for c in cards if reviewable(c.card_type, c.front, c.back)][:limit]
 
     deck_ids = {c.deck_id for c in cards}
     deck_names: dict[uuid.UUID, str] = {}
@@ -101,10 +121,16 @@ async def queue(
             state=c.state,
             reps=(c.state_info.reps if c.state_info else 0),
             due=c.due,
+            source_file_id=c.source_file_id,
+            source_locator=c.source_locator,
         )
         for c in cards
     ]
-    return ReviewQueueOut(items=items, remaining_today=await _remaining_today(db, user.id))
+    return ReviewQueueOut(
+        items=items,
+        remaining_today=await _remaining_today(db, user.id),
+        needs_repair=await _needs_repair(db, user.id, deck_id),
+    )
 
 
 @router.post("/answer", response_model=ReviewAnswerOut)
@@ -116,6 +142,9 @@ async def answer(
         now = now.replace(tzinfo=timezone.utc)
 
     card = await _active_card(db, user.id, body.card_id)
+    error = card_quality_error(card.card_type, card.front, card.back)
+    if error:
+        raise AppError(422, "CARD_NEEDS_ANSWER", error)
     cs = card.state_info
     if cs is None:
         cs = CardState(card_id=card.id, step=0, reps=0, lapses=0)
@@ -227,7 +256,7 @@ async def forecast(
 
     rows = (
         await db.execute(
-            select(Card.due)
+            select(Card.card_type, Card.front, Card.back, Card.due)
             .where(
                 Card.user_id == user.id,
                 Card.deleted_at.is_(None),
@@ -238,7 +267,9 @@ async def forecast(
     ).all()
 
     buckets = [0] * days
-    for (due,) in rows:
+    for card_type, front, back, due in rows:
+        if not reviewable(card_type, front, back):
+            continue
         idx = int((due - today).total_seconds() // 86400)
         if 0 <= idx < days:
             buckets[idx] += 1

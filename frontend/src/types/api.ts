@@ -71,11 +71,14 @@ export interface ReviewCard {
   state: string
   reps: number
   due: string
+  source_file_id: string | null
+  source_locator: Record<string, unknown> | null
 }
 
 export interface ReviewQueue {
   items: ReviewCard[]
   remaining_today: number
+  needs_repair: number
 }
 
 export interface ReviewAnswerOut {
@@ -163,6 +166,7 @@ export interface FocusSession {
   ended_at: string
   duration_seconds: number
   completed: boolean
+  interrupted: boolean
   /** 「这一轮啃什么」的卡组快照（可选） */
   deck_id: string | null
   deck_name: string
@@ -216,6 +220,7 @@ export interface StatsDashboard {
     dist_today: Record<string, number>
     dist_week: Record<string, number>
     dist_month: Record<string, number>
+    topics: Record<'today' | 'week' | 'month', { name: string; sec: number }[]>
   }
   metrics: {
     total_reviews: number

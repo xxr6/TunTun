@@ -3,7 +3,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.services.card_quality import card_quality_error
 
 CardType = Literal["basic", "cloze", "quote", "image"]
 CardState = Literal["new", "learning", "review", "relearning", "suspended", "buried"]
@@ -21,6 +23,13 @@ class CardCreate(BaseModel):
     source_file_id: uuid.UUID | None = None
     source_locator: dict[str, Any] | None = None
     tags: list[str] = []
+
+    @model_validator(mode="after")
+    def validate_study_card(self):
+        error = card_quality_error(self.card_type, self.front, self.back)
+        if error:
+            raise ValueError(error)
+        return self
 
 
 class CardUpdate(BaseModel):

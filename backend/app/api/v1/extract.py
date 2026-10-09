@@ -14,6 +14,7 @@ from app.models.deck import Deck
 from app.models.file import Document
 from app.models.note import Note, NoteCandidate
 from app.models.user import User
+from app.services.card_quality import generated_candidate_ready
 from app.schemas.extract import (
     CandidateOut,
     ExtractFromFileIn,
@@ -92,7 +93,7 @@ async def extract_from_file(
             confidence=float(c.get("confidence", 0.8)),
         )
         for c in cands
-        if c.get("front")
+        if generated_candidate_ready(str(c.get("card_type", "basic")), str(c.get("front", "")), str(c.get("back", "")))
     ]
     db.add_all(candidate_objs)
     db.add(AiUsage(user_id=user.id, kind="extract"))
@@ -151,6 +152,8 @@ async def split_candidates(
 
     created = 0
     for c in cands:
+        if not generated_candidate_ready(c.card_type, c.front, c.back):
+            continue
         card = Card(
             deck_id=body.deck_id,
             user_id=user.id,

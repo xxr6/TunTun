@@ -137,15 +137,17 @@
                 <option :value="null" disabled>选择存入的卡组</option>
                 <option v-for="d in decks" :key="d.id" :value="d.id">{{ d.name }}</option>
               </select>
+              <button class="mini-btn" @click="showCreateDeck = true">＋ 新建卡组</button>
               <button class="mini-btn" @click="toggleAll">{{ allSelected ? '取消全选' : '全选' }}</button>
             </div>
             <div class="cand-list">
               <label v-for="c in currentNote.candidates" :key="c.id" class="cand-item" :class="{ done: !!c.card_id }">
-                <input v-if="!c.card_id" type="checkbox" v-model="selectedIds" :value="c.id" />
+                <input v-if="!c.card_id" type="checkbox" v-model="selectedIds" :value="c.id" :disabled="!candidateReady(c)" />
                 <span v-else class="cand-done-tag">已入库</span>
                 <div class="cand-body">
                   <div class="cand-front">{{ c.front }}</div>
                   <div class="cand-back" v-if="c.back">{{ c.back }}</div>
+                  <div class="cand-back" v-else-if="!c.card_id">缺少答案，暂不能入库</div>
                 </div>
                 <span class="cand-meta">
                   <span class="cand-type">{{ typeLabel(c.card_type) }}</span>
@@ -166,29 +168,35 @@
         </div>
       </div>
     </div>
+    <CreateDeckDialog v-if="showCreateDeck" @close="showCreateDeck = false" @created="onDeckCreated" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+defineOptions({ name: 'Extract' })
+
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { decksApi } from '@/api/decks'
 import { extractApi } from '@/api/extract'
 import { filesApi } from '@/api/files'
+import { useExtractStore } from '@/stores/extract'
 import CallChip from '@/components/common/CallChip.vue'
-import type { Deck, FileItem, Note, NoteDetail } from '@/types/api'
+import CreateDeckDialog from '@/components/common/CreateDeckDialog.vue'
+import type { Deck, FileItem, Note } from '@/types/api'
+import { cardQualityError } from '@/lib/cardQuality'
 
 /* ── 数据 ── */
 const files = ref<FileItem[]>([])
 const notes = ref<Note[]>([])
-const currentNote = ref<NoteDetail | null>(null)
 const decks = ref<Deck[]>([])
-const sourceDocId = ref<string | null>(null)
-const loading = ref(false)
+const route = useRoute()
+const extractStore = useExtractStore()
+const { sourceDocId, currentNote, selectedIds, viewMode, loading, stepIdx, err } = storeToRefs(extractStore)
 const saving = ref(false)
-const err = ref('')
-const selectedIds = ref<string[]>([])
 const targetDeckId = ref<string | null>(null)
-const viewMode = ref<'read' | 'source'>('read')
+const showCreateDeck = ref(false)
 const copied = ref(false)
 
 /* ── 来源上传（复用内容库解析，解析完自动提炼）── */
@@ -265,55 +273,17 @@ const STEPS = [
   { name: 'AI 提炼知识点', desc: '去重、合并、标注置信度' },
   { name: '生成 Markdown', desc: '输出带目录的笔记' },
 ]
-const stepIdx = ref(-1) // -1 idle；0..4 进行到第几步；5 全部完成
-const stepTimers: ReturnType<typeof setTimeout>[] = []
-
 function stepState(i: number): 'pending' | 'active' | 'done' {
   if (stepIdx.value > i) return 'done'
   if (stepIdx.value === i) return 'active'
   return 'pending'
 }
-function startSteps() {
-  stopSteps()
-  stepIdx.value = 0
-  const delays = [700, 900, 700, 0, 0] // 第 4 步（AI）悬停直到返回；第 5 步随返回跳完
-  let acc = 0
-  delays.forEach((d, i) => {
-    acc += d
-    if (d > 0) stepTimers.push(setTimeout(() => (stepIdx.value = i + 1), acc))
-  })
-}
-function finishSteps() {
-  stopSteps()
-  stepIdx.value = 5
-  stepTimers.push(setTimeout(() => (loading.value = false), 450))
-}
-function stopSteps() {
-  stepTimers.forEach(clearTimeout)
-  stepTimers.length = 0
-}
 
 /* ── 提炼 ── */
 async function run(docId: string | null) {
   if (!docId || loading.value) return
-  loading.value = true
-  err.value = ''
-  currentNote.value = null
-  selectedIds.value = []
-  viewMode.value = 'read'
-  startSteps()
-  try {
-    const res = await extractApi.fromFile(docId)
-    currentNote.value = res.data
-    selectedIds.value = res.data.candidates.filter((c) => c.confidence >= 0.8 && !c.card_id).map((c) => c.id)
-    finishSteps()
-    await load()
-  } catch (e: any) {
-    stopSteps()
-    stepIdx.value = -1
-    loading.value = false
-    err.value = e?.response?.data?.message || '提炼失败'
-  }
+  await extractStore.run(docId)
+  if (currentNote.value) await load()
 }
 
 async function openNote(id: string) {
@@ -369,7 +339,12 @@ function downloadMd() {
 }
 
 /* ── 考点候选 ── */
-const selectable = computed(() => (currentNote.value?.candidates || []).filter((c) => !c.card_id))
+function candidateReady(c: { card_type: string; front: string; back: string }) {
+  return !cardQualityError(c.card_type, c.front, c.back)
+    && (c.card_type !== 'basic' || (c.front.length <= 180 && /[？?]/.test(c.front)))
+    && (c.card_type === 'basic' || c.front.length <= 240)
+}
+const selectable = computed(() => (currentNote.value?.candidates || []).filter((c) => !c.card_id && candidateReady(c)))
 const allSelected = computed(() => selectable.value.length > 0 && selectable.value.every((c) => selectedIds.value.includes(c.id)))
 
 function toggleAll() {
@@ -398,14 +373,27 @@ function typeLabel(t: string) {
 }
 
 async function load() {
-  const [f, n, d] = await Promise.all([filesApi.list(), extractApi.listNotes(), decksApi.list()])
+  const [f, n, d] = await Promise.all([filesApi.list({ all: true }), extractApi.listNotes(), decksApi.list()])
   files.value = f.data.filter((x) => x.doc_id && x.doc_status === 'done' && !x.is_dir)
   notes.value = n.data
   decks.value = d.data
+  const requested = typeof route.query.deck === 'string' ? route.query.deck : null
+  if (requested && decks.value.some((deck) => deck.id === requested)) targetDeckId.value = requested
+  else if (targetDeckId.value && !decks.value.some((deck) => deck.id === targetDeckId.value)) targetDeckId.value = null
+  else if (!targetDeckId.value && decks.value.length) targetDeckId.value = decks.value[0].id
   if (!sourceDocId.value && files.value.length) sourceDocId.value = files.value[0].doc_id!
 }
 
+function onDeckCreated(deck: Deck) {
+  decks.value.push(deck)
+  targetDeckId.value = deck.id
+  showCreateDeck.value = false
+}
+
 onMounted(load)
+watch(() => route.query.deck, (id) => {
+  if (typeof id === 'string' && decks.value.some((deck) => deck.id === id)) targetDeckId.value = id
+})
 </script>
 
 <style scoped>

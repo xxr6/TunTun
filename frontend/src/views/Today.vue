@@ -9,10 +9,10 @@
             连续 {{ streakDays }} 天
           </span>
           <h1 class="hero-h1">{{ greet }}，{{ heroTitle }}</h1>
-          <p class="hero-p">你的记忆黄金时段是晚上 8 点到 10 点，先把今天到期的啃掉</p>
+          <p class="hero-p">{{ dueCount > 0 ? `先复习今天到期的 ${dueCount} 张卡，再安排一段专注时间。` : needsRepair > 0 ? `有 ${needsRepair} 张卡需要补全答案，修好后就能继续复习。` : '今天没有到期卡片，可以读点新内容或开始专注。' }}</p>
           <div class="row gap12 wrap" style="margin-top:16px">
-            <button class="btn btn-lg" style="background:var(--paper)" @click="router.push('/review')">
-              <svg class="icon"><use href="#i-play" /></svg>开始复习
+            <button class="btn btn-lg" style="background:var(--paper)" @click="router.push(needsRepair > 0 && dueCount === 0 ? '/decks' : '/review')">
+              <svg class="icon"><use href="#i-play" /></svg>{{ needsRepair > 0 && dueCount === 0 ? '补全卡片' : '开始复习' }}
             </button>
             <button class="btn btn-lg btn-soft" @click="router.push('/focus')">
               <svg class="icon"><use href="#i-timer" /></svg>进入专注
@@ -28,7 +28,7 @@
           </svg>
           <div class="ring-txt">
             <div class="num">{{ ringPct }}%</div>
-            <div class="lbl">今日计划</div>
+            <div class="lbl">今日复习进度</div>
           </div>
         </div>
       </div>
@@ -41,6 +41,9 @@
         <div class="val" :style="{ color: s.color }">{{ s.value }}</div>
         <div class="foot">{{ s.foot }}</div>
       </div>
+    </div>
+    <div v-if="overviewError" class="stats-error">
+      卡片和复习统计加载失败。<button @click="loadTodayStats">重试</button>
     </div>
 
     <div class="two-col">
@@ -60,6 +63,7 @@
               <div style="flex:1;min-width:0" @click="toggleTask(t)">
                 <div class="t-name">{{ t.title }}</div>
               </div>
+              <button class="task-focus" :aria-label="`专注于 ${t.title}`" title="专注于这项计划" @click="router.push({ path: '/focus', query: { task: t.title } })"><svg class="icon"><use href="#i-timer" /></svg></button>
               <button class="task-del" aria-label="删除这一项" @click="removeTask(t)"><svg class="icon"><use href="#i-close" /></svg></button>
             </div>
             <div v-if="!plans.length" class="muted" style="font-size:13px">还没有计划，下面加一条。</div>
@@ -74,15 +78,15 @@
         <div class="card pad rise insight" style="margin-top:14px">
           <div class="row gap8" style="margin-bottom:6px">
             <svg class="icon" style="color:var(--orange-d)"><use href="#i-spark" /></svg>
-            <div class="h-sec">为你适配的学习节奏</div>
+            <div class="h-sec">今天的学习建议</div>
           </div>
           <div class="insight-row">
             <div class="ic" style="background:var(--orange-l);color:var(--orange-d)">
               <svg class="icon"><use href="#i-clock" /></svg>
             </div>
             <div>
-              <div class="tt">黄金复习时段：20:00 - 22:00</div>
-              <div class="dd">这个时段你的正确率比其他时段高 11%，新卡已经被优先安排在这里</div>
+              <div class="tt">选择适合自己的复习时间</div>
+              <div class="dd">到期卡会出现在复习队列；完成后再读新资料，节奏更清楚。</div>
             </div>
           </div>
           <div class="insight-row">
@@ -90,8 +94,8 @@
               <svg class="icon"><use href="#i-brain" /></svg>
             </div>
             <div>
-              <div class="tt">今天负载{{ dueCount > 20 ? '偏重' : '偏轻' }}，{{ dueCount > 20 ? '按队列慢慢啃' : '可以加量' }}</div>
-              <div class="dd">当前到期 {{ dueCount }} 张{{ dueCount > 20 ? '，先啃最旧的一批' : '，现在多拆几张新卡不会噎着' }}</div>
+              <div class="tt">{{ dueCount > 0 ? `当前有 ${dueCount} 张到期卡` : needsRepair > 0 ? `${needsRepair} 张卡待补全` : '今天没有到期卡' }}</div>
+              <div class="dd">{{ dueCount > 0 ? '可以先完成复习，再决定是否添加新卡。' : needsRepair > 0 ? '去卡组补上答案，这些卡才会进入复习队列。' : '想继续积累？从内容库打开资料，划词制作新卡。' }}</div>
             </div>
           </div>
         </div>
@@ -118,23 +122,31 @@
         </div>
 
         <div class="card pad rise" style="margin-top:14px">
-          <div class="row between" style="margin-bottom:10px">
-            <div class="h-sec">刚囤进来的</div>
-            <button class="btn btn-ghost" style="padding:6px 13px;font-size:13px" @click="router.push('/library')">
-              全部<svg class="icon"><use href="#i-arrow" /></svg>
+          <div class="h-sec" style="margin-bottom:8px">刚囤进来的</div>
+          <div v-if="recentLoading" class="muted recent-message">正在加载最近内容…</div>
+          <div v-else-if="recentItems.length" class="recent-list">
+            <button v-for="item in recentItems" :key="`${item.kind}-${item.id}`" class="recent-row" @click="onOpenRecent(item)">
+              <div class="recent-ic" :style="recentMeta(item).style">
+                <svg class="icon" style="width:18px;height:18px"><use :href="recentMeta(item).icon" /></svg>
+              </div>
+              <div class="recent-content">
+                <div class="recent-name">{{ item.title }}</div>
+                <div class="recent-detail">{{ recentMeta(item).sub }} · {{ formatRecentTime(item.createdAt) }}</div>
+              </div>
+              <svg class="icon recent-arrow"><use href="#i-arrow" /></svg>
             </button>
+            <button v-if="recentError" class="recent-retry" @click="loadRecent">部分内容暂时没加载到，点此重试</button>
           </div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <div v-for="(f, i) in recentFiles" :key="f.id" class="recent-row" @click="onOpenFile(f)">
-              <div class="recent-ic" :style="{ background: fileMeta(i, f).bg, color: fileMeta(i, f).fg }">
-                <svg class="icon" style="width:18px;height:18px"><use :href="fileMeta(i, f).icon" /></svg>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div class="recent-name">{{ f.name }}</div>
-                <div class="muted" style="font-size:12px">{{ fileMeta(i, f).sub }}</div>
-              </div>
+          <div v-else-if="recentError" class="recent-empty">
+            <div class="muted">最近内容加载失败，请重试。</div>
+            <button class="btn" @click="loadRecent">重新加载</button>
+          </div>
+          <div v-else class="recent-empty">
+            <div class="muted">这里会显示最近上传的资料和新建的卡片。</div>
+            <div class="row gap8 wrap">
+              <button class="btn btn-primary" @click="router.push('/library')">上传第一份资料</button>
+              <button class="btn" @click="router.push('/decks')">新建卡组</button>
             </div>
-            <div v-if="!recentFiles.length" class="muted" style="font-size:13px">还没有文件，去内容库上传一份。</div>
           </div>
         </div>
 
@@ -170,7 +182,7 @@ import { plansApi } from '@/api/plans'
 import { reviewApi } from '@/api/review'
 import { statsApi } from '@/api/stats'
 import { useUserStore } from '@/stores/user'
-import type { CheckinStatus, FileItem, PlanTask } from '@/types/api'
+import type { Card, CheckinStatus, FileItem, PlanTask } from '@/types/api'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -180,9 +192,15 @@ const todayQueue = ref(0)
 const todayReviews = ref(0)
 const totalCards = ref(0)
 const todayFocusH = ref('0h')
+const overviewLoading = ref(true)
+const overviewError = ref(false)
 const streakDays = ref(1)
 const recentFiles = ref<FileItem[]>([])
+const recentCards = ref<Card[]>([])
+const recentLoading = ref(true)
+const recentError = ref(false)
 const dueCount = ref(0)
+const needsRepair = ref(0)
 
 // ── 今日计划 ──
 const plans = ref<PlanTask[]>([])
@@ -209,7 +227,7 @@ const greet = computed(() => {
   return '晚上好'
 })
 const heroTitle = computed(() =>
-  todayQueue.value > 0 ? `还有 ${todayQueue.value} 张卡没啃完` : '今天的卡都啃完了'
+  todayQueue.value > 0 ? `还有 ${todayQueue.value} 张卡没啃完` : needsRepair.value > 0 ? `还有 ${needsRepair.value} 张卡待补全` : '今天的卡都啃完了'
 )
 
 const ringPct = computed(() => {
@@ -221,18 +239,58 @@ const ringOffset = computed(() => CIRC * (1 - ringPct.value / 100))
 const statCards = computed(() => [
   { icon: '#i-flame', label: '连续天数', value: String(streakDays.value), foot: '天', color: 'var(--orange-d)' },
   { icon: '#i-clock', label: '今日专注', value: todayFocusH.value, foot: '目标 3h', color: 'var(--grape-d)' },
-  { icon: '#i-brain', label: '囤了多少', value: totalCards.value.toLocaleString(), foot: '张卡片', color: 'var(--ham-d)' },
-  { icon: '#i-target', label: '今日已复习', value: String(todayReviews.value), foot: '次', color: 'var(--mint-d)' },
+  { icon: '#i-brain', label: '囤了多少', value: overviewLoading.value ? '…' : overviewError.value ? '—' : totalCards.value.toLocaleString(), foot: '张卡片', color: 'var(--ham-d)' },
+  { icon: '#i-target', label: '今日已复习', value: overviewLoading.value ? '…' : overviewError.value ? '—' : String(todayReviews.value), foot: '次', color: 'var(--mint-d)' },
 ])
 
-const FILE_COLORS = ['var(--grape-l)|var(--grape-d)|#i-doc', 'var(--orange-l)|var(--orange-d)|#i-book', 'var(--mint-l)|var(--mint-d)|#i-code']
-function fileMeta(i: number, f: FileItem) {
-  const [bg, fg, icon] = (FILE_COLORS[i % 3]).split('|')
-  const sub = f.doc_status === 'done' ? '已解析，可划词成卡' : f.doc_status === 'failed' ? '解析失败，可重试' : '解析中…'
-  return { bg, fg, icon, sub }
+type RecentItem =
+  | { kind: 'file'; id: string; title: string; createdAt: string; file: FileItem }
+  | { kind: 'card'; id: string; title: string; createdAt: string; card: Card }
+
+const recentItems = computed<RecentItem[]>(() => [
+  ...recentFiles.value.map((file): RecentItem => ({ kind: 'file', id: file.id, title: file.name, createdAt: file.created_at, file })),
+  ...recentCards.value.map((card): RecentItem => ({ kind: 'card', id: card.id, title: cardPreview(card.front), createdAt: card.created_at, card })),
+].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 2))
+
+function cardPreview(front: string) {
+  const firstLine = front.split(/\r?\n/).map((line) => line.trim()).find((line) => line && !/^[|:\-\s]+$/.test(line)) || ''
+  const plain = firstLine
+    .replace(/\{\{c\d+::([^}:]+)(?:::[^}]+)?\}\}/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/^[#>*\-\d.)\s]+/, '')
+    .replace(/[|*_`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > 36 ? `${plain.slice(0, 36)}…` : plain || '未命名卡片'
 }
-function onOpenFile(f: FileItem) {
-  if (f.doc_id) router.push(`/reader/${f.doc_id}`)
+
+function recentMeta(item: RecentItem) {
+  if (item.kind === 'card') return { icon: '#i-cards', style: { background: 'var(--mint-l)', color: 'var(--mint-d)' }, sub: '卡片' }
+  const file = item.file
+  const sub = file.doc_status === 'done' ? '资料' : file.doc_status === 'failed' ? '资料 · 解析失败' : '资料 · 处理中'
+  return { icon: file.ext === 'pdf' ? '#i-doc' : '#i-book', style: { background: 'var(--grape-l)', color: 'var(--grape-d)' }, sub }
+}
+function formatRecentTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '刚刚'
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000)
+  if (days <= 0) return '今天'
+  if (days === 1) return '昨天'
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+function onOpenRecent(item: RecentItem) {
+  if (item.kind === 'card') return router.push({ path: '/decks', query: { deck: item.card.deck_id } })
+  if (item.file.doc_status === 'done' && item.file.doc_id) return router.push({ path: '/reader', query: { doc: item.file.doc_id } })
+  return router.push({ path: '/library', query: { file: item.file.id } })
+}
+
+async function loadRecent() {
+  recentLoading.value = true
+  const [files, cards] = await Promise.allSettled([filesApi.list({ all: true }), cardsApi.list({ limit: 10 })])
+  recentFiles.value = files.status === 'fulfilled' ? files.value.data.filter((file) => !file.is_dir) : []
+  recentCards.value = cards.status === 'fulfilled' ? cards.value.data.items : []
+  recentError.value = files.status === 'rejected' || cards.status === 'rejected'
+  recentLoading.value = false
 }
 
 /* ── 今日计划 CRUD ── */
@@ -297,24 +355,37 @@ async function doCheckin() {
   }
 }
 
-onMounted(async () => {
+async function loadTodayStats() {
+  overviewLoading.value = true
+  overviewError.value = false
+  const [queue, overview, focus] = await Promise.allSettled([
+    reviewApi.queue(), statsApi.overview(), focusApi.summary(),
+  ])
+  if (queue.status === 'fulfilled') {
+    todayQueue.value = queue.value.data.remaining_today
+    dueCount.value = queue.value.data.remaining_today
+    needsRepair.value = queue.value.data.needs_repair
+  }
+  if (overview.status === 'fulfilled') {
+    totalCards.value = overview.value.data.total_cards
+    todayReviews.value = overview.value.data.today_reviews
+  } else {
+    overviewError.value = true
+  }
+  overviewLoading.value = false
+  if (focus.status === 'fulfilled') {
+    const seconds = focus.value.data.today_seconds
+    todayFocusH.value = seconds >= 3600
+      ? (seconds / 3600).toFixed(1) + 'h'
+      : Math.round(seconds / 60) + 'min'
+  }
+}
+
+onMounted(() => {
   loadPlans()
   loadCheckin()
-  try {
-    const [q, o, focus, files] = await Promise.all([
-      reviewApi.queue(), statsApi.overview(), focusApi.summary(), filesApi.list(),
-    ])
-    todayQueue.value = q.data.remaining_today
-    dueCount.value = q.data.remaining_today
-    totalCards.value = o.data.total_cards
-    todayReviews.value = o.data.today_reviews
-    todayFocusH.value = focus.data.today_seconds >= 3600
-      ? (focus.data.today_seconds / 3600).toFixed(1) + 'h'
-      : Math.round(focus.data.today_seconds / 60) + 'min'
-    recentFiles.value = files.data.filter((f) => !f.is_dir).slice(0, 3)
-  } catch {
-    /* 数据加载失败不阻塞渲染 */
-  }
+  loadRecent()
+  loadTodayStats()
 })
 </script>
 
@@ -360,14 +431,28 @@ onMounted(async () => {
 .ring-txt .lbl { font-size: 11.5px; font-weight: 800; color: var(--hero-sub); margin-top: 3px; }
 
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+@media (max-width: 760px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-inner { flex-wrap: nowrap; gap: 8px; }
+  .hero-inner > div:first-child { min-width: 0 !important; }
+  .hero-ring, .hero-ring svg { width: 104px; height: 104px; }
+  .hero-ring .num { font-size: 23px; }
+}
+@media (max-width: 440px) {
+  .hero-ring { display: none; }
+  .hero .btn { padding: 8px 12px; font-size: 12px; }
+}
 .stat { padding: 11px 14px; }
 .stat .lab { font-size: 12px; color: var(--ink2); font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .stat .lab .icon { width: 14px; height: 14px; }
 .stat .val { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: -0.5px; margin-top: 4px; line-height: 1; }
 .stat .foot { font-size: 11.5px; color: var(--ink3); margin-top: 3px; }
+.stats-error { margin-top: 8px; color: var(--berry); font-size: 12px; }
+.stats-error button { border: 0; padding: 0; background: none; color: inherit; font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
 
-.two-col { display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; margin-top: 12px; align-items: start; }
-@media (max-width: 920px) { .two-col { grid-template-columns: 1fr; } }
+.two-col { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; align-items: start; }
+.two-col > div { min-width: 0; }
+@media (max-width: 920px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
 .pad { padding: 14px 16px; }
 .h-sec { font-size: 15px; font-weight: 800; }
 .h-sub { color: var(--ink2); font-size: 12.5px; margin-top: 2px; }
@@ -382,6 +467,9 @@ onMounted(async () => {
   color: var(--ink3); background: none; border: 2px solid transparent; cursor: pointer;
   opacity: 0; transition: all 0.2s var(--ease);
 }
+.task-focus { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: 8px; background: var(--cream); color: var(--orange-d); cursor: pointer; }
+.task-focus .icon { width: 15px; height: 15px; }
+.task-focus:hover { background: var(--orange-l); }
 .task:hover .task-del { opacity: 1; }
 .task-del:hover { color: var(--berry); border-color: var(--line); background: var(--paper); }
 .task-del .icon { width: 14px; height: 14px; }
@@ -406,10 +494,19 @@ onMounted(async () => {
 
 .recent-row {
   display: flex; align-items: center; gap: 11px; padding: 6px 8px;
+  width: 100%; min-width: 0; overflow: hidden; box-sizing: border-box; text-align: left; background: transparent; color: var(--ink); font: inherit;
   border-radius: 14px; border: 2px solid transparent; cursor: pointer;
   transition: all 0.28s var(--ease);
 }
 .recent-row:hover { background: var(--warm); border-color: var(--line); }
+.recent-row:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.recent-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.recent-content { flex: 1; min-width: 0; overflow: hidden; }
+.recent-detail { font-size: 12px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-arrow { width: 15px; height: 15px; color: var(--ink3); flex: none; }
+.recent-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 7px 0 2px; font-size: 13px; }
+.recent-message { font-size: 13px; padding: 8px 0; }
+.recent-retry { border: 0; background: none; color: var(--orange-d); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left; }
 .recent-ic {
   width: 36px; height: 36px; border-radius: 12px; border: 2px solid var(--line);
   display: flex; align-items: center; justify-content: center; flex: none;

@@ -8,6 +8,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* 装饰性 blob 气泡故意超出视口，在 html 层剪掉，防止撑出横向滚动 */
+  overflow-x: hidden;
 }
 
 body {

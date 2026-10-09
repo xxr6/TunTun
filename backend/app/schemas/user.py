@@ -21,3 +21,20 @@ class UserOut(BaseModel):
 
 class UserUpdate(BaseModel):
     timezone: str | None = None
+    username: str | None = None
+
+
+class GoalsIn(BaseModel):
+    """专注目标（秒）。None 表示不修改该档。"""
+    today: int | None = None
+    week: int | None = None
+    month: int | None = None
+
+
+class FocusTopicIn(BaseModel):
+    label: str
+
+
+class AvatarOut(BaseModel):
+    avatar_v: int
+    avatar_ext: str

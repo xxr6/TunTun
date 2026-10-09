@@ -3,8 +3,11 @@ import type { DocumentContent, FileItem } from '@/types/api'
 
 export const filesApi = {
   /** q 非空时后端跨目录全库搜（文件名或解析正文） */
-  list(params: { parentId?: string; q?: string } = {}) {
-    return client.get<FileItem[]>('/files', { params: { parent_id: params.parentId, q: params.q } })
+  list(params: { parentId?: string; q?: string; all?: boolean } = {}) {
+    return client.get<FileItem[]>('/files', { params: { parent_id: params.parentId, q: params.q, all: params.all } })
+  },
+  folders() {
+    return client.get<FileItem[]>('/files/folders')
   },
   upload(file: File, parentId?: string) {
     const fd = new FormData()
@@ -14,6 +17,9 @@ export const filesApi = {
   },
   createFolder(name: string, parentId?: string) {
     return client.post<FileItem>('/files/folder', { name, parent_id: parentId })
+  },
+  move(id: string, parentId: string | null) {
+    return client.patch<FileItem>(`/files/${id}`, { parent_id: parentId })
   },
   remove(id: string) {
     return client.delete(`/files/${id}`)
